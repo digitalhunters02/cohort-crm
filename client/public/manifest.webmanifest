@@ -1,0 +1,16 @@
+{
+  "name": "Cohort — Ashford Preparatory Academy",
+  "short_name": "Cohort",
+  "description": "Admissions and enrollment CRM for Ashford Preparatory Academy.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#f7f3ec",
+  "theme_color": "#2b1114",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
