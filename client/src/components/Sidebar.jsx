@@ -39,7 +39,7 @@ const SECTIONS = [
   },
 ];
 
-function LogoMark() {
+export function LogoMark() {
   return (
     <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
       <path d="M13 2 23.5 8v10L13 24 2.5 18V8Z" stroke="#c98a4d" strokeWidth="1.5" strokeLinejoin="round" />
@@ -49,9 +49,13 @@ function LogoMark() {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ open = false, onNavigate }) {
   return (
-    <aside className="w-60 flex-shrink-0 h-full bg-side text-sideText flex flex-col min-h-0">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[82vw] flex-shrink-0 bg-side text-sideText flex flex-col min-h-0 shadow-2xl transition-transform duration-300 ease-in-out md:static md:z-auto md:h-full md:w-60 md:max-w-none md:translate-x-0 md:shadow-none ${
+        open ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
       <div className="px-5 pt-6 pb-5 flex items-center gap-2.5 border-b border-sideLine flex-shrink-0">
         <LogoMark />
         <div>
@@ -72,6 +76,7 @@ export default function Sidebar() {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
+                  onClick={onNavigate}
                   className={({ isActive }) =>
                     `relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13.5px] font-medium transition-colors ${
                       isActive ? 'bg-sideSoft text-white' : 'text-sideText/85 hover:bg-sideSoft/60 hover:text-white'

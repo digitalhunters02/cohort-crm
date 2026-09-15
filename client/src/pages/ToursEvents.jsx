@@ -120,7 +120,7 @@ export default function ToursEvents() {
       {modal && (
         <Modal title={modal.mode === 'create' ? 'New Tour / Event' : 'Edit Tour / Event'} onClose={() => setModal(null)} wide>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Title">
                 <input required className={inputCls} value={modal.form.title} onChange={(e) => updateField('title', e.target.value)} />
               </Field>

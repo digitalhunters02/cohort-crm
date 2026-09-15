@@ -167,6 +167,11 @@ const ICONS = {
     ['line', 10, 11, 10, 17],
     ['line', 14, 11, 14, 17],
   ],
+  menu: [
+    ['line', 3, 6, 21, 6],
+    ['line', 3, 12, 21, 12],
+    ['line', 3, 18, 21, 18],
+  ],
 };
 
 export default function Icon({ name, size = 18, stroke = 1.8, className = '' }) {

@@ -122,7 +122,7 @@ export default function Interviews() {
       {modal && (
         <Modal title={modal.mode === 'create' ? 'New Interview' : 'Edit Interview'} onClose={() => setModal(null)} wide>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Applicant">
                 <select required className={inputCls} value={modal.form.applicant_id} onChange={(e) => updateField('applicant_id', e.target.value)}>
                   {applicants.map((a) => <option key={a.id} value={a.id}>{a.student_name} &middot; {a.grade_applying_for}</option>)}

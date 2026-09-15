@@ -118,7 +118,7 @@ export default function Families() {
       {modal && (
         <Modal title={modal.mode === 'create' ? 'New Family' : 'Edit Family'} onClose={() => setModal(null)} wide>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Primary Guardian">
                 <input required className={inputCls} value={modal.form.primary_guardian_name} onChange={(e) => updateField('primary_guardian_name', e.target.value)} />
               </Field>

@@ -123,7 +123,7 @@ export default function Tuition() {
       {modal && (
         <Modal title={modal.mode === 'create' ? 'New Tuition Invoice' : 'Edit Invoice'} onClose={() => setModal(null)} wide>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Family">
                 <select required className={inputCls} value={modal.form.family_id} onChange={(e) => updateField('family_id', e.target.value)}>
                   {families.map((f) => <option key={f.id} value={f.id}>{f.primary_guardian_name}</option>)}

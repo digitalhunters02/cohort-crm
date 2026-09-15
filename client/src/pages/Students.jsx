@@ -122,7 +122,7 @@ export default function Students() {
       {modal && (
         <Modal title={modal.mode === 'create' ? 'New Student' : 'Edit Student'} onClose={() => setModal(null)} wide>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Student Name">
                 <input required className={inputCls} value={modal.form.name} onChange={(e) => updateField('name', e.target.value)} />
               </Field>
