@@ -1,7 +1,9 @@
 // In local dev, "/api" is proxied to the local server (see vite.config.js).
 // In production there's no such proxy, so VITE_API_URL must point at the
 // deployed backend's base URL (e.g. https://cohort-crm-api.onrender.com).
-const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+// Exported so Settings can show the exact webhook callback URL to paste
+// into Meta's WhatsApp console.
+export const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
 
 async function handle(r) {
   const data = await r.json().catch(() => ({}));
@@ -110,6 +112,14 @@ const api = {
   createAutomation: (data) => post('/automations', data),
   toggleAutomation: (id) => patch(`/automations/${id}/toggle`, {}),
   deleteAutomation: (id) => del(`/automations/${id}`),
+
+  // ---- WhatsApp Business (shared, whole-school connection) ----
+  whatsappStatus: () => get('/integrations/whatsapp/status'),
+  whatsappConnect: (data) => post('/integrations/whatsapp/connect', data),
+  whatsappDisconnect: () => post('/integrations/whatsapp/disconnect', {}),
+  whatsappConversations: () => get('/integrations/whatsapp/conversations'),
+  whatsappConversation: (phone) => get(`/integrations/whatsapp/conversations/${encodeURIComponent(phone)}`),
+  whatsappSend: (to, text) => post('/integrations/whatsapp/send', { to, text }),
 };
 
 export default api;

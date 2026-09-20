@@ -32,6 +32,7 @@ const SECTIONS = [
   {
     label: 'System',
     items: [
+      { to: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
       { to: '/automations', label: 'Automations', icon: 'zap' },
       { to: '/reports', label: 'Reports', icon: 'barChart' },
       { to: '/settings', label: 'Settings', icon: 'settings' },

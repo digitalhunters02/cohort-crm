@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import api from '../api.js';
+import api, { BASE } from '../api.js';
 import Layout from '../components/Layout.jsx';
-import { Card, CardHead, Avatar, Badge, Spinner, Button, Field, inputCls } from '../components/ui.jsx';
+import { Card, CardHead, Avatar, Badge, Spinner, Button, Field, Modal, inputCls } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
 import { downloadCSV } from '../format.js';
 
@@ -42,8 +42,84 @@ function saveJSON(key, value) {
   }
 }
 
+function WhatsAppConnectForm({ onCancel, onSubmit, busy, error }) {
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [businessAccountId, setBusinessAccountId] = useState('');
+  const [verifyToken, setVerifyToken] = useState('');
+  const webhookUrl = `${BASE}/integrations/whatsapp/webhook`;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({
+          phoneNumberId: phoneNumberId.trim(),
+          accessToken: accessToken.trim(),
+          businessAccountId: businessAccountId.trim(),
+          verifyToken: verifyToken.trim(),
+        });
+      }}
+      className="flex flex-col gap-4"
+    >
+      {error && (
+        <div className="text-xs text-rose bg-roseTint border border-rose/30 rounded-lg px-3 py-2">{error}</div>
+      )}
+      <Field label="Phone Number ID">
+        <input
+          required
+          autoFocus
+          className={inputCls}
+          value={phoneNumberId}
+          onChange={(e) => setPhoneNumberId(e.target.value)}
+          placeholder="1029384756"
+        />
+      </Field>
+      <Field label="Access Token">
+        <input
+          required
+          type="password"
+          className={inputCls}
+          value={accessToken}
+          onChange={(e) => setAccessToken(e.target.value)}
+          placeholder="EAAG..."
+        />
+      </Field>
+      <Field label="WhatsApp Business Account ID (optional)">
+        <input
+          className={inputCls}
+          value={businessAccountId}
+          onChange={(e) => setBusinessAccountId(e.target.value)}
+          placeholder="1029384756"
+        />
+      </Field>
+      <Field label="Verify Token (optional — pick any value and reuse it in Meta's console)">
+        <input
+          className={inputCls}
+          value={verifyToken}
+          onChange={(e) => setVerifyToken(e.target.value)}
+          placeholder="my-secret-token"
+        />
+      </Field>
+      <div className="text-xs text-muted leading-relaxed bg-wash border border-line rounded-lg px-3 py-2">
+        In Meta's developer console (WhatsApp &rarr; Configuration), paste this as the callback URL:
+        <div className="font-mono text-ink break-all mt-1">{webhookUrl}</div>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" type="button" onClick={onCancel} disabled={busy}>Cancel</Button>
+        <Button variant="brand" type="submit" disabled={busy}>{busy ? 'Connecting…' : 'Connect'}</Button>
+      </div>
+    </form>
+  );
+}
+
 export default function Settings() {
   const [users, setUsers] = useState(null);
+
+  const [whatsapp, setWhatsapp] = useState({ connected: false, displayPhone: null });
+  const [whatsappBusy, setWhatsappBusy] = useState(false);
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const [whatsappError, setWhatsappError] = useState(null);
 
   const [profile, setProfile] = useState(() => loadJSON(PROFILE_KEY, DEFAULT_PROFILE));
   const [editingProfile, setEditingProfile] = useState(false);
@@ -64,6 +140,43 @@ export default function Settings() {
   useEffect(() => {
     api.users().then(setUsers);
   }, []);
+
+  const refreshWhatsappStatus = () => {
+    api.whatsappStatus().then(setWhatsapp).catch(() => {});
+  };
+
+  useEffect(refreshWhatsappStatus, []);
+
+  async function toggleWhatsapp() {
+    if (whatsapp.connected) {
+      setWhatsappBusy(true);
+      try {
+        await api.whatsappDisconnect();
+        refreshWhatsappStatus();
+      } catch (e) {
+        setWhatsappError(e.message || "Couldn't disconnect WhatsApp");
+      } finally {
+        setWhatsappBusy(false);
+      }
+    } else {
+      setWhatsappError(null);
+      setWhatsappModalOpen(true);
+    }
+  }
+
+  async function submitWhatsapp(data) {
+    setWhatsappBusy(true);
+    setWhatsappError(null);
+    try {
+      await api.whatsappConnect(data);
+      refreshWhatsappStatus();
+      setWhatsappModalOpen(false);
+    } catch (e) {
+      setWhatsappError(e.message || "Couldn't connect WhatsApp");
+    } finally {
+      setWhatsappBusy(false);
+    }
+  }
 
   function toggleNotif(key) {
     setNotifs((prev) => {
@@ -258,6 +371,33 @@ export default function Settings() {
       </div>
 
       <Card className="mt-5">
+        <CardHead title="Integrations" sub="Connect shared, whole-school tools" />
+        <div className="px-5 pb-5 flex items-center gap-3 pt-4">
+          <span
+            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: whatsapp.connected ? '#1FAF54' : '#f0e8d8', color: whatsapp.connected ? '#fff' : '#6d6255' }}
+          >
+            <Icon name="whatsapp" size={17} />
+          </span>
+          <div className="min-w-0 flex-grow">
+            <div className="text-sm font-medium text-ink">WhatsApp Business</div>
+            <div className="text-xs text-muted truncate">
+              {whatsapp.connected ? whatsapp.displayPhone : 'Not connected — paste credentials from Meta’s developer console'}
+            </div>
+          </div>
+          {whatsapp.connected ? (
+            <button type="button" onClick={whatsappBusy ? undefined : toggleWhatsapp} title="Click to disconnect">
+              <Badge tone="green">{whatsappBusy ? '…' : 'Connected'}</Badge>
+            </button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={toggleWhatsapp} disabled={whatsappBusy}>
+              {whatsappBusy ? '…' : 'Connect'}
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      <Card className="mt-5">
         <CardHead title="Data Export" sub="Download any of Cohort's core records as CSV" />
         <div className="p-5 flex flex-wrap gap-2">
           {EXPORTS.map((exp) => (
@@ -267,6 +407,21 @@ export default function Settings() {
           ))}
         </div>
       </Card>
+
+      {whatsappModalOpen && (
+        <Modal
+          title="Connect WhatsApp Business"
+          sub="One shared number for the whole school"
+          onClose={() => setWhatsappModalOpen(false)}
+        >
+          <WhatsAppConnectForm
+            onCancel={() => setWhatsappModalOpen(false)}
+            onSubmit={submitWhatsapp}
+            busy={whatsappBusy}
+            error={whatsappError}
+          />
+        </Modal>
+      )}
     </Layout>
   );
 }

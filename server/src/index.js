@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { get, all, run, initSchema } from './db.js';
+import * as whatsapp from './whatsapp.js';
 
 const app = express();
 const PORT = process.env.PORT || 4340;
@@ -11,6 +12,23 @@ app.use(express.json());
 // Wraps an async route handler so a rejected promise reaches Express's
 // error handler instead of crashing the process or hanging the request.
 const ar = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// Public — Meta calls these directly (webhook verification handshake, then
+// message delivery), so they can't carry any app credentials. This app has
+// no auth gate today, but these are kept registered first (and would sit
+// ahead of any future `app.use('/api', requireAuth)`-style gate) since a
+// webhook endpoint must never require a login Meta can't provide.
+app.get('/api/integrations/whatsapp/webhook', ar(async (req, res) => {
+  const conn = await whatsapp.getConnection();
+  const challenge = whatsapp.verifyWebhook(req.query, conn?.verify_token);
+  if (challenge) return res.status(200).send(challenge);
+  res.sendStatus(403);
+}));
+
+app.post('/api/integrations/whatsapp/webhook', ar(async (req, res) => {
+  await whatsapp.handleWebhookEvent(req.body);
+  res.sendStatus(200);
+}));
 
 // "Today" the seed data's near-term dates are anchored to, so relative-date
 // math (upcoming tours, overdue tuition, etc.) stays sensible regardless of
@@ -726,6 +744,49 @@ app.get('/api/reports', ar(async (req, res) => {
     funnelByStage, tuitionSummary, tuitionByStatus, inquiriesBySource, aidByStatus,
     studentsByGrade, enrollmentConversion,
   });
+}));
+
+// ---------- WhatsApp Business integration (one shared, whole-school connection) ----------
+app.get('/api/integrations/whatsapp/status', ar(async (req, res) => {
+  const conn = await whatsapp.getConnection();
+  res.json({ connected: !!conn, displayPhone: conn?.display_phone || null });
+}));
+
+app.post('/api/integrations/whatsapp/connect', ar(async (req, res) => {
+  const { phoneNumberId, accessToken, businessAccountId, verifyToken } = req.body || {};
+  if (!phoneNumberId || !accessToken) {
+    return badRequest(res, 'Phone Number ID and Access Token are required.');
+  }
+  try {
+    const displayPhone = await whatsapp.saveConnection({ phoneNumberId, accessToken, businessAccountId, verifyToken });
+    res.json({ connected: true, displayPhone });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+}));
+
+app.post('/api/integrations/whatsapp/disconnect', ar(async (req, res) => {
+  await whatsapp.disconnect();
+  res.status(204).end();
+}));
+
+app.get('/api/integrations/whatsapp/conversations', ar(async (req, res) => {
+  res.json(await whatsapp.listConversations());
+}));
+
+app.get('/api/integrations/whatsapp/conversations/:phone', ar(async (req, res) => {
+  res.json(await whatsapp.getConversation(req.params.phone));
+}));
+
+app.post('/api/integrations/whatsapp/send', ar(async (req, res) => {
+  const { to, text } = req.body || {};
+  if (!to || !text) return badRequest(res, 'to and text are required');
+  try {
+    await whatsapp.sendMessage(to, text);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 }));
 
 initSchema()
