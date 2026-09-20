@@ -1,12 +1,16 @@
 import express from 'express';
 import cors from 'cors';
-import db from './db.js';
+import { get, all, run, initSchema } from './db.js';
 
 const app = express();
 const PORT = process.env.PORT || 4340;
 
 app.use(cors());
 app.use(express.json());
+
+// Wraps an async route handler so a rejected promise reaches Express's
+// error handler instead of crashing the process or hanging the request.
+const ar = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // "Today" the seed data's near-term dates are anchored to, so relative-date
 // math (upcoming tours, overdue tuition, etc.) stays sensible regardless of
@@ -21,9 +25,9 @@ function notFound(res, label) {
   return res.status(404).json({ error: `${label} not found` });
 }
 
-function blockedByRefs(res, refs, id) {
+async function blockedByRefs(res, refs, id) {
   for (const [table, col, label] of refs) {
-    const { count } = db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${col} = ?`).get(id);
+    const { count } = await get(`SELECT COUNT(*) AS count FROM ${table} WHERE ${col} = ?`, id);
     if (count > 0) {
       res.status(409).json({ error: `Cannot delete: linked to ${count} ${label} record(s). Remove those first.` });
       return true;
@@ -33,48 +37,48 @@ function blockedByRefs(res, refs, id) {
 }
 
 // ---------- users (staff) ----------
-function selectUser(id) {
-  return db.prepare(`SELECT * FROM users WHERE id = ?`).get(id);
+async function selectUser(id) {
+  return get(`SELECT * FROM users WHERE id = ?`, id);
 }
 
-app.get('/api/users', (req, res) => {
-  res.json(db.prepare(`SELECT * FROM users ORDER BY name`).all());
-});
+app.get('/api/users', ar(async (req, res) => {
+  res.json(await all(`SELECT * FROM users ORDER BY name`));
+}));
 
-app.post('/api/users', (req, res) => {
+app.post('/api/users', ar(async (req, res) => {
   const { name, email, role, initials, color } = req.body;
   if (!name || !email || !role || !initials || !color) {
     return badRequest(res, 'name, email, role, initials, and color are required');
   }
   try {
-    const info = db.prepare(`
-      INSERT INTO users (name, email, role, initials, color) VALUES (?, ?, ?, ?, ?)
-    `).run(name, email, role, initials, color);
-    res.status(201).json(selectUser(info.lastInsertRowid));
+    const info = await run(`
+      INSERT INTO users (name, email, role, initials, color) VALUES (?, ?, ?, ?, ?) RETURNING id
+    `, name, email, role, initials, color);
+    res.status(201).json(await selectUser(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/users/:id', (req, res) => {
-  const existing = selectUser(req.params.id);
+app.put('/api/users/:id', ar(async (req, res) => {
+  const existing = await selectUser(req.params.id);
   if (!existing) return notFound(res, 'Staff member');
   const { name, email, role, initials, color } = req.body;
   if (!name || !email || !role || !initials || !color) {
     return badRequest(res, 'name, email, role, initials, and color are required');
   }
   try {
-    db.prepare(`
+    await run(`
       UPDATE users SET name = ?, email = ?, role = ?, initials = ?, color = ? WHERE id = ?
-    `).run(name, email, role, initials, color, req.params.id);
-    res.json(selectUser(req.params.id));
+    `, name, email, role, initials, color, req.params.id);
+    res.json(await selectUser(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/users/:id', (req, res) => {
-  const existing = selectUser(req.params.id);
+app.delete('/api/users/:id', ar(async (req, res) => {
+  const existing = await selectUser(req.params.id);
   if (!existing) return notFound(res, 'Staff member');
   const refs = [
     ['inquiries', 'owner_user_id', 'inquiry'],
@@ -82,568 +86,570 @@ app.delete('/api/users/:id', (req, res) => {
     ['interviews', 'interviewer_user_id', 'interview'],
     ['activities', 'owner_user_id', 'activity'],
   ];
-  if (blockedByRefs(res, refs, req.params.id)) return;
-  db.prepare(`DELETE FROM users WHERE id = ?`).run(req.params.id);
+  if (await blockedByRefs(res, refs, req.params.id)) return;
+  await run(`DELETE FROM users WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- inquiries ----------
-function selectInquiry(id) {
-  return db.prepare(`
+async function selectInquiry(id) {
+  return get(`
     SELECT i.*, u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM inquiries i LEFT JOIN users u ON u.id = i.owner_user_id
     WHERE i.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/inquiries', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/inquiries', ar(async (req, res) => {
+  res.json(await all(`
     SELECT i.*, u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM inquiries i LEFT JOIN users u ON u.id = i.owner_user_id
     ORDER BY i.created_at DESC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/inquiries', (req, res) => {
+app.post('/api/inquiries', ar(async (req, res) => {
   const { student_name, grade_applying_for, parent_name, parent_email, parent_phone, source, status, owner_user_id, notes } = req.body;
   if (!student_name || !grade_applying_for || !parent_name || !source) {
     return badRequest(res, 'student_name, grade_applying_for, parent_name, and source are required');
   }
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO inquiries (student_name, grade_applying_for, parent_name, parent_email, parent_phone, source, status, owner_user_id, created_at, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+    `,
       student_name, grade_applying_for, parent_name, parent_email || null, parent_phone || null,
       source, status || 'New', owner_user_id || null, new Date().toISOString().slice(0, 10), notes || null
     );
-    res.status(201).json(selectInquiry(info.lastInsertRowid));
+    res.status(201).json(await selectInquiry(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/inquiries/:id', (req, res) => {
-  const existing = selectInquiry(req.params.id);
+app.put('/api/inquiries/:id', ar(async (req, res) => {
+  const existing = await selectInquiry(req.params.id);
   if (!existing) return notFound(res, 'Inquiry');
   const { student_name, grade_applying_for, parent_name, parent_email, parent_phone, source, status, owner_user_id, notes } = req.body;
   if (!student_name || !grade_applying_for || !parent_name || !source) {
     return badRequest(res, 'student_name, grade_applying_for, parent_name, and source are required');
   }
   try {
-    db.prepare(`
+    await run(`
       UPDATE inquiries SET student_name = ?, grade_applying_for = ?, parent_name = ?, parent_email = ?, parent_phone = ?,
         source = ?, status = ?, owner_user_id = ?, notes = ?
       WHERE id = ?
-    `).run(
+    `,
       student_name, grade_applying_for, parent_name, parent_email || null, parent_phone || null,
       source, status || 'New', owner_user_id || null, notes || null, req.params.id
     );
-    res.json(selectInquiry(req.params.id));
+    res.json(await selectInquiry(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/inquiries/:id', (req, res) => {
-  const existing = selectInquiry(req.params.id);
+app.delete('/api/inquiries/:id', ar(async (req, res) => {
+  const existing = await selectInquiry(req.params.id);
   if (!existing) return notFound(res, 'Inquiry');
-  if (blockedByRefs(res, [['applicants', 'inquiry_id', 'applicant']], req.params.id)) return;
-  db.prepare(`DELETE FROM inquiries WHERE id = ?`).run(req.params.id);
+  if (await blockedByRefs(res, [['applicants', 'inquiry_id', 'applicant']], req.params.id)) return;
+  await run(`DELETE FROM inquiries WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- applicants ----------
-function selectApplicant(id) {
-  return db.prepare(`
+async function selectApplicant(id) {
+  return get(`
     SELECT a.*, u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM applicants a LEFT JOIN users u ON u.id = a.owner_user_id
     WHERE a.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/applicants', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/applicants', ar(async (req, res) => {
+  res.json(await all(`
     SELECT a.*, u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM applicants a LEFT JOIN users u ON u.id = a.owner_user_id
     ORDER BY a.id DESC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/applicants', (req, res) => {
+app.post('/api/applicants', ar(async (req, res) => {
   const { inquiry_id, student_name, grade_applying_for, parent_name, parent_email, parent_phone, stage, owner_user_id, application_date, decision_date, notes } = req.body;
   if (!student_name || !grade_applying_for || !parent_name) {
     return badRequest(res, 'student_name, grade_applying_for, and parent_name are required');
   }
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO applicants (inquiry_id, student_name, grade_applying_for, parent_name, parent_email, parent_phone, stage, owner_user_id, application_date, decision_date, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+    `,
       inquiry_id || null, student_name, grade_applying_for, parent_name, parent_email || null, parent_phone || null,
       stage || 'Inquiry', owner_user_id || null, application_date || null, decision_date || null, notes || null
     );
-    res.status(201).json(selectApplicant(info.lastInsertRowid));
+    res.status(201).json(await selectApplicant(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/applicants/:id', (req, res) => {
-  const existing = selectApplicant(req.params.id);
+app.put('/api/applicants/:id', ar(async (req, res) => {
+  const existing = await selectApplicant(req.params.id);
   if (!existing) return notFound(res, 'Applicant');
   const { inquiry_id, student_name, grade_applying_for, parent_name, parent_email, parent_phone, stage, owner_user_id, application_date, decision_date, notes } = req.body;
   if (!student_name || !grade_applying_for || !parent_name) {
     return badRequest(res, 'student_name, grade_applying_for, and parent_name are required');
   }
   try {
-    db.prepare(`
+    await run(`
       UPDATE applicants SET inquiry_id = ?, student_name = ?, grade_applying_for = ?, parent_name = ?, parent_email = ?,
         parent_phone = ?, stage = ?, owner_user_id = ?, application_date = ?, decision_date = ?, notes = ?
       WHERE id = ?
-    `).run(
+    `,
       inquiry_id || null, student_name, grade_applying_for, parent_name, parent_email || null, parent_phone || null,
       stage || 'Inquiry', owner_user_id || null, application_date || null, decision_date || null, notes || null, req.params.id
     );
-    res.json(selectApplicant(req.params.id));
+    res.json(await selectApplicant(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.patch('/api/applicants/:id/stage', (req, res) => {
+app.patch('/api/applicants/:id/stage', ar(async (req, res) => {
   const { stage } = req.body;
   const valid = ['Inquiry', 'Tour Scheduled', 'Application Submitted', 'Interview Scheduled', 'Accepted', 'Waitlisted', 'Enrolled', 'Declined'];
   if (!valid.includes(stage)) return badRequest(res, 'Invalid stage');
-  const existing = selectApplicant(req.params.id);
+  const existing = await selectApplicant(req.params.id);
   if (!existing) return notFound(res, 'Applicant');
-  db.prepare(`UPDATE applicants SET stage = ? WHERE id = ?`).run(stage, req.params.id);
-  res.json(selectApplicant(req.params.id));
-});
+  await run(`UPDATE applicants SET stage = ? WHERE id = ?`, stage, req.params.id);
+  res.json(await selectApplicant(req.params.id));
+}));
 
-app.delete('/api/applicants/:id', (req, res) => {
-  const existing = selectApplicant(req.params.id);
+app.delete('/api/applicants/:id', ar(async (req, res) => {
+  const existing = await selectApplicant(req.params.id);
   if (!existing) return notFound(res, 'Applicant');
-  if (blockedByRefs(res, [['interviews', 'applicant_id', 'interview']], req.params.id)) return;
-  db.prepare(`DELETE FROM applicants WHERE id = ?`).run(req.params.id);
+  if (await blockedByRefs(res, [['interviews', 'applicant_id', 'interview']], req.params.id)) return;
+  await run(`DELETE FROM applicants WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- tours & events ----------
-function selectTour(id) {
-  return db.prepare(`SELECT * FROM tours_events WHERE id = ?`).get(id);
+async function selectTour(id) {
+  return get(`SELECT * FROM tours_events WHERE id = ?`, id);
 }
 
-app.get('/api/tours-events', (req, res) => {
-  res.json(db.prepare(`SELECT * FROM tours_events ORDER BY date ASC`).all());
-});
+app.get('/api/tours-events', ar(async (req, res) => {
+  res.json(await all(`SELECT * FROM tours_events ORDER BY date ASC`));
+}));
 
-app.post('/api/tours-events', (req, res) => {
+app.post('/api/tours-events', ar(async (req, res) => {
   const { type, title, date, capacity, attendees_count, location, notes } = req.body;
   if (!type || !title || !date) return badRequest(res, 'type, title, and date are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO tours_events (type, title, date, capacity, attendees_count, location, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(type, title, date, capacity === '' || capacity === undefined ? null : capacity, attendees_count || 0, location || null, notes || null);
-    res.status(201).json(selectTour(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
+    `, type, title, date, capacity === '' || capacity === undefined ? null : capacity, attendees_count || 0, location || null, notes || null);
+    res.status(201).json(await selectTour(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/tours-events/:id', (req, res) => {
-  const existing = selectTour(req.params.id);
+app.put('/api/tours-events/:id', ar(async (req, res) => {
+  const existing = await selectTour(req.params.id);
   if (!existing) return notFound(res, 'Tour/event');
   const { type, title, date, capacity, attendees_count, location, notes } = req.body;
   if (!type || !title || !date) return badRequest(res, 'type, title, and date are required');
   try {
-    db.prepare(`
+    await run(`
       UPDATE tours_events SET type = ?, title = ?, date = ?, capacity = ?, attendees_count = ?, location = ?, notes = ?
       WHERE id = ?
-    `).run(type, title, date, capacity === '' || capacity === undefined ? null : capacity, attendees_count || 0, location || null, notes || null, req.params.id);
-    res.json(selectTour(req.params.id));
+    `, type, title, date, capacity === '' || capacity === undefined ? null : capacity, attendees_count || 0, location || null, notes || null, req.params.id);
+    res.json(await selectTour(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/tours-events/:id', (req, res) => {
-  const existing = selectTour(req.params.id);
+app.delete('/api/tours-events/:id', ar(async (req, res) => {
+  const existing = await selectTour(req.params.id);
   if (!existing) return notFound(res, 'Tour/event');
-  db.prepare(`DELETE FROM tours_events WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM tours_events WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- interviews ----------
-function selectInterview(id) {
-  return db.prepare(`
+async function selectInterview(id) {
+  return get(`
     SELECT iv.*, a.student_name AS applicant_name, a.grade_applying_for,
       u.name AS interviewer_name, u.initials AS interviewer_initials, u.color AS interviewer_color
     FROM interviews iv
     LEFT JOIN applicants a ON a.id = iv.applicant_id
     LEFT JOIN users u ON u.id = iv.interviewer_user_id
     WHERE iv.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/interviews', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/interviews', ar(async (req, res) => {
+  res.json(await all(`
     SELECT iv.*, a.student_name AS applicant_name, a.grade_applying_for,
       u.name AS interviewer_name, u.initials AS interviewer_initials, u.color AS interviewer_color
     FROM interviews iv
     LEFT JOIN applicants a ON a.id = iv.applicant_id
     LEFT JOIN users u ON u.id = iv.interviewer_user_id
     ORDER BY iv.scheduled_at ASC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/interviews', (req, res) => {
+app.post('/api/interviews', ar(async (req, res) => {
   const { applicant_id, interviewer_user_id, scheduled_at, status, notes } = req.body;
   if (!applicant_id || !scheduled_at) return badRequest(res, 'applicant_id and scheduled_at are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO interviews (applicant_id, interviewer_user_id, scheduled_at, status, notes)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(applicant_id, interviewer_user_id || null, scheduled_at, status || 'Scheduled', notes || null);
-    res.status(201).json(selectInterview(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?) RETURNING id
+    `, applicant_id, interviewer_user_id || null, scheduled_at, status || 'Scheduled', notes || null);
+    res.status(201).json(await selectInterview(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/interviews/:id', (req, res) => {
-  const existing = selectInterview(req.params.id);
+app.put('/api/interviews/:id', ar(async (req, res) => {
+  const existing = await selectInterview(req.params.id);
   if (!existing) return notFound(res, 'Interview');
   const { applicant_id, interviewer_user_id, scheduled_at, status, notes } = req.body;
   if (!applicant_id || !scheduled_at) return badRequest(res, 'applicant_id and scheduled_at are required');
   try {
-    db.prepare(`
+    await run(`
       UPDATE interviews SET applicant_id = ?, interviewer_user_id = ?, scheduled_at = ?, status = ?, notes = ?
       WHERE id = ?
-    `).run(applicant_id, interviewer_user_id || null, scheduled_at, status || 'Scheduled', notes || null, req.params.id);
-    res.json(selectInterview(req.params.id));
+    `, applicant_id, interviewer_user_id || null, scheduled_at, status || 'Scheduled', notes || null, req.params.id);
+    res.json(await selectInterview(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/interviews/:id', (req, res) => {
-  const existing = selectInterview(req.params.id);
+app.delete('/api/interviews/:id', ar(async (req, res) => {
+  const existing = await selectInterview(req.params.id);
   if (!existing) return notFound(res, 'Interview');
-  db.prepare(`DELETE FROM interviews WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM interviews WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- families ----------
-function selectFamily(id) {
-  return db.prepare(`SELECT * FROM families WHERE id = ?`).get(id);
+async function selectFamily(id) {
+  return get(`SELECT * FROM families WHERE id = ?`, id);
 }
 
-app.get('/api/families', (req, res) => {
-  res.json(db.prepare(`SELECT * FROM families ORDER BY primary_guardian_name`).all());
-});
+app.get('/api/families', ar(async (req, res) => {
+  res.json(await all(`SELECT * FROM families ORDER BY primary_guardian_name`));
+}));
 
-app.post('/api/families', (req, res) => {
+app.post('/api/families', ar(async (req, res) => {
   const { primary_guardian_name, secondary_guardian_name, email, phone, address, notes } = req.body;
   if (!primary_guardian_name) return badRequest(res, 'primary_guardian_name is required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO families (primary_guardian_name, secondary_guardian_name, email, phone, address, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(primary_guardian_name, secondary_guardian_name || null, email || null, phone || null, address || null, notes || null);
-    res.status(201).json(selectFamily(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?, ?) RETURNING id
+    `, primary_guardian_name, secondary_guardian_name || null, email || null, phone || null, address || null, notes || null);
+    res.status(201).json(await selectFamily(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/families/:id', (req, res) => {
-  const existing = selectFamily(req.params.id);
+app.put('/api/families/:id', ar(async (req, res) => {
+  const existing = await selectFamily(req.params.id);
   if (!existing) return notFound(res, 'Family');
   const { primary_guardian_name, secondary_guardian_name, email, phone, address, notes } = req.body;
   if (!primary_guardian_name) return badRequest(res, 'primary_guardian_name is required');
   try {
-    db.prepare(`
+    await run(`
       UPDATE families SET primary_guardian_name = ?, secondary_guardian_name = ?, email = ?, phone = ?, address = ?, notes = ?
       WHERE id = ?
-    `).run(primary_guardian_name, secondary_guardian_name || null, email || null, phone || null, address || null, notes || null, req.params.id);
-    res.json(selectFamily(req.params.id));
+    `, primary_guardian_name, secondary_guardian_name || null, email || null, phone || null, address || null, notes || null, req.params.id);
+    res.json(await selectFamily(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/families/:id', (req, res) => {
-  const existing = selectFamily(req.params.id);
+app.delete('/api/families/:id', ar(async (req, res) => {
+  const existing = await selectFamily(req.params.id);
   if (!existing) return notFound(res, 'Family');
   const refs = [
     ['students', 'family_id', 'student'],
     ['tuition_invoices', 'family_id', 'tuition invoice'],
     ['financial_aid', 'family_id', 'financial aid'],
   ];
-  if (blockedByRefs(res, refs, req.params.id)) return;
-  db.prepare(`DELETE FROM families WHERE id = ?`).run(req.params.id);
+  if (await blockedByRefs(res, refs, req.params.id)) return;
+  await run(`DELETE FROM families WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- students ----------
-function selectStudent(id) {
-  return db.prepare(`
+async function selectStudent(id) {
+  return get(`
     SELECT s.*, f.primary_guardian_name, f.secondary_guardian_name
     FROM students s LEFT JOIN families f ON f.id = s.family_id
     WHERE s.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/students', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/students', ar(async (req, res) => {
+  res.json(await all(`
     SELECT s.*, f.primary_guardian_name, f.secondary_guardian_name
     FROM students s LEFT JOIN families f ON f.id = s.family_id
     ORDER BY s.name
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/students', (req, res) => {
+app.post('/api/students', ar(async (req, res) => {
   const { name, grade, homeroom, family_id, enrollment_date, status } = req.body;
   if (!name || !grade || !family_id) return badRequest(res, 'name, grade, and family_id are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO students (name, grade, homeroom, family_id, enrollment_date, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(name, grade, homeroom || null, family_id, enrollment_date || new Date().toISOString().slice(0, 10), status || 'Active');
-    res.status(201).json(selectStudent(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?, ?) RETURNING id
+    `, name, grade, homeroom || null, family_id, enrollment_date || new Date().toISOString().slice(0, 10), status || 'Active');
+    res.status(201).json(await selectStudent(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/students/:id', (req, res) => {
-  const existing = selectStudent(req.params.id);
+app.put('/api/students/:id', ar(async (req, res) => {
+  const existing = await selectStudent(req.params.id);
   if (!existing) return notFound(res, 'Student');
   const { name, grade, homeroom, family_id, enrollment_date, status } = req.body;
   if (!name || !grade || !family_id) return badRequest(res, 'name, grade, and family_id are required');
   try {
-    db.prepare(`
+    await run(`
       UPDATE students SET name = ?, grade = ?, homeroom = ?, family_id = ?, enrollment_date = ?, status = ?
       WHERE id = ?
-    `).run(name, grade, homeroom || null, family_id, enrollment_date || existing.enrollment_date, status || 'Active', req.params.id);
-    res.json(selectStudent(req.params.id));
+    `, name, grade, homeroom || null, family_id, enrollment_date || existing.enrollment_date, status || 'Active', req.params.id);
+    res.json(await selectStudent(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/students/:id', (req, res) => {
-  const existing = selectStudent(req.params.id);
+app.delete('/api/students/:id', ar(async (req, res) => {
+  const existing = await selectStudent(req.params.id);
   if (!existing) return notFound(res, 'Student');
-  db.prepare(`DELETE FROM students WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM students WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- tuition invoices ----------
-function selectInvoice(id) {
-  return db.prepare(`
+async function selectInvoice(id) {
+  return get(`
     SELECT t.*, f.primary_guardian_name
     FROM tuition_invoices t LEFT JOIN families f ON f.id = t.family_id
     WHERE t.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/tuition-invoices', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/tuition-invoices', ar(async (req, res) => {
+  res.json(await all(`
     SELECT t.*, f.primary_guardian_name
     FROM tuition_invoices t LEFT JOIN families f ON f.id = t.family_id
     ORDER BY t.due_date ASC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/tuition-invoices', (req, res) => {
+app.post('/api/tuition-invoices', ar(async (req, res) => {
   const { family_id, term, amount_due, amount_paid, due_date, status } = req.body;
   if (!family_id || !term || !amount_due || !due_date) {
     return badRequest(res, 'family_id, term, amount_due, and due_date are required');
   }
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO tuition_invoices (family_id, term, amount_due, amount_paid, due_date, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(family_id, term, amount_due, amount_paid || 0, due_date, status || 'Pending');
-    res.status(201).json(selectInvoice(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?, ?) RETURNING id
+    `, family_id, term, amount_due, amount_paid || 0, due_date, status || 'Pending');
+    res.status(201).json(await selectInvoice(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/tuition-invoices/:id', (req, res) => {
-  const existing = selectInvoice(req.params.id);
+app.put('/api/tuition-invoices/:id', ar(async (req, res) => {
+  const existing = await selectInvoice(req.params.id);
   if (!existing) return notFound(res, 'Invoice');
   const { family_id, term, amount_due, amount_paid, due_date, status } = req.body;
   if (!family_id || !term || !amount_due || !due_date) {
     return badRequest(res, 'family_id, term, amount_due, and due_date are required');
   }
   try {
-    db.prepare(`
+    await run(`
       UPDATE tuition_invoices SET family_id = ?, term = ?, amount_due = ?, amount_paid = ?, due_date = ?, status = ?
       WHERE id = ?
-    `).run(family_id, term, amount_due, amount_paid || 0, due_date, status || 'Pending', req.params.id);
-    res.json(selectInvoice(req.params.id));
+    `, family_id, term, amount_due, amount_paid || 0, due_date, status || 'Pending', req.params.id);
+    res.json(await selectInvoice(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/tuition-invoices/:id', (req, res) => {
-  const existing = selectInvoice(req.params.id);
+app.delete('/api/tuition-invoices/:id', ar(async (req, res) => {
+  const existing = await selectInvoice(req.params.id);
   if (!existing) return notFound(res, 'Invoice');
-  db.prepare(`DELETE FROM tuition_invoices WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM tuition_invoices WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- financial aid ----------
-function selectAid(id) {
-  return db.prepare(`
+async function selectAid(id) {
+  return get(`
     SELECT fa.*, f.primary_guardian_name
     FROM financial_aid fa LEFT JOIN families f ON f.id = fa.family_id
     WHERE fa.id = ?
-  `).get(id);
+  `, id);
 }
 
-app.get('/api/financial-aid', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/financial-aid', ar(async (req, res) => {
+  res.json(await all(`
     SELECT fa.*, f.primary_guardian_name
     FROM financial_aid fa LEFT JOIN families f ON f.id = fa.family_id
     ORDER BY fa.id DESC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/financial-aid', (req, res) => {
+app.post('/api/financial-aid', ar(async (req, res) => {
   const { family_id, program, amount_awarded, status, academic_year } = req.body;
   if (!family_id || !program || !academic_year) return badRequest(res, 'family_id, program, and academic_year are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO financial_aid (family_id, program, amount_awarded, status, academic_year)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(family_id, program, amount_awarded === '' || amount_awarded === undefined ? null : amount_awarded, status || 'Under Review', academic_year);
-    res.status(201).json(selectAid(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?) RETURNING id
+    `, family_id, program, amount_awarded === '' || amount_awarded === undefined ? null : amount_awarded, status || 'Under Review', academic_year);
+    res.status(201).json(await selectAid(info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.put('/api/financial-aid/:id', (req, res) => {
-  const existing = selectAid(req.params.id);
+app.put('/api/financial-aid/:id', ar(async (req, res) => {
+  const existing = await selectAid(req.params.id);
   if (!existing) return notFound(res, 'Financial aid record');
   const { family_id, program, amount_awarded, status, academic_year } = req.body;
   if (!family_id || !program || !academic_year) return badRequest(res, 'family_id, program, and academic_year are required');
   try {
-    db.prepare(`
+    await run(`
       UPDATE financial_aid SET family_id = ?, program = ?, amount_awarded = ?, status = ?, academic_year = ?
       WHERE id = ?
-    `).run(family_id, program, amount_awarded === '' || amount_awarded === undefined ? null : amount_awarded, status || 'Under Review', academic_year, req.params.id);
-    res.json(selectAid(req.params.id));
+    `, family_id, program, amount_awarded === '' || amount_awarded === undefined ? null : amount_awarded, status || 'Under Review', academic_year, req.params.id);
+    res.json(await selectAid(req.params.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/financial-aid/:id', (req, res) => {
-  const existing = selectAid(req.params.id);
+app.delete('/api/financial-aid/:id', ar(async (req, res) => {
+  const existing = await selectAid(req.params.id);
   if (!existing) return notFound(res, 'Financial aid record');
-  db.prepare(`DELETE FROM financial_aid WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM financial_aid WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- activities ----------
-app.get('/api/activities', (req, res) => {
-  res.json(db.prepare(`
+app.get('/api/activities', ar(async (req, res) => {
+  res.json(await all(`
     SELECT ac.*, u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM activities ac LEFT JOIN users u ON u.id = ac.owner_user_id
     ORDER BY ac.occurred_at DESC
-  `).all());
-});
+  `));
+}));
 
-app.post('/api/activities', (req, res) => {
+app.post('/api/activities', ar(async (req, res) => {
   const { type, subject, related_type, related_id, owner_user_id, occurred_at, notes } = req.body;
   if (!type || !subject) return badRequest(res, 'type and subject are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO activities (type, subject, related_type, related_id, owner_user_id, occurred_at, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(type, subject, related_type || null, related_id || null, owner_user_id || null, occurred_at || new Date().toISOString(), notes || null);
-    res.status(201).json(db.prepare(`SELECT * FROM activities WHERE id = ?`).get(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
+    `, type, subject, related_type || null, related_id || null, owner_user_id || null, occurred_at || new Date().toISOString(), notes || null);
+    res.status(201).json(await get(`SELECT * FROM activities WHERE id = ?`, info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.delete('/api/activities/:id', (req, res) => {
-  const existing = db.prepare(`SELECT * FROM activities WHERE id = ?`).get(req.params.id);
+app.delete('/api/activities/:id', ar(async (req, res) => {
+  const existing = await get(`SELECT * FROM activities WHERE id = ?`, req.params.id);
   if (!existing) return notFound(res, 'Activity');
-  db.prepare(`DELETE FROM activities WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM activities WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- automations ----------
-app.get('/api/automations', (req, res) => {
-  res.json(db.prepare(`SELECT * FROM automations ORDER BY runs_30d DESC`).all());
-});
+app.get('/api/automations', ar(async (req, res) => {
+  res.json(await all(`SELECT * FROM automations ORDER BY runs_30d DESC`));
+}));
 
-app.post('/api/automations', (req, res) => {
+app.post('/api/automations', ar(async (req, res) => {
   const { name, trigger_desc, action_desc, active } = req.body;
   if (!name || !trigger_desc || !action_desc) return badRequest(res, 'name, trigger_desc, and action_desc are required');
   try {
-    const info = db.prepare(`
+    const info = await run(`
       INSERT INTO automations (name, trigger_desc, action_desc, active, runs_30d)
-      VALUES (?, ?, ?, ?, 0)
-    `).run(name, trigger_desc, action_desc, active === false ? 0 : 1);
-    res.status(201).json(db.prepare(`SELECT * FROM automations WHERE id = ?`).get(info.lastInsertRowid));
+      VALUES (?, ?, ?, ?, 0) RETURNING id
+    `, name, trigger_desc, action_desc, active === false ? 0 : 1);
+    res.status(201).json(await get(`SELECT * FROM automations WHERE id = ?`, info.rows[0].id));
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
-app.patch('/api/automations/:id/toggle', (req, res) => {
-  const existing = db.prepare(`SELECT * FROM automations WHERE id = ?`).get(req.params.id);
+app.patch('/api/automations/:id/toggle', ar(async (req, res) => {
+  const existing = await get(`SELECT * FROM automations WHERE id = ?`, req.params.id);
   if (!existing) return notFound(res, 'Automation');
-  db.prepare(`UPDATE automations SET active = ? WHERE id = ?`).run(existing.active ? 0 : 1, req.params.id);
-  res.json(db.prepare(`SELECT * FROM automations WHERE id = ?`).get(req.params.id));
-});
+  await run(`UPDATE automations SET active = ? WHERE id = ?`, existing.active ? 0 : 1, req.params.id);
+  res.json(await get(`SELECT * FROM automations WHERE id = ?`, req.params.id));
+}));
 
-app.delete('/api/automations/:id', (req, res) => {
-  const existing = db.prepare(`SELECT * FROM automations WHERE id = ?`).get(req.params.id);
+app.delete('/api/automations/:id', ar(async (req, res) => {
+  const existing = await get(`SELECT * FROM automations WHERE id = ?`, req.params.id);
   if (!existing) return notFound(res, 'Automation');
-  db.prepare(`DELETE FROM automations WHERE id = ?`).run(req.params.id);
+  await run(`DELETE FROM automations WHERE id = ?`, req.params.id);
   res.json({ ok: true });
-});
+}));
 
 // ---------- dashboard ----------
-app.get('/api/dashboard', (req, res) => {
-  const openInquiries = db.prepare(`
+app.get('/api/dashboard', ar(async (req, res) => {
+  const openInquiries = await get(`
     SELECT COUNT(*) AS count FROM inquiries WHERE status NOT IN ('Converted', 'Closed')
-  `).get();
+  `);
 
-  const inPipeline = db.prepare(`
+  const inPipeline = await get(`
     SELECT COUNT(*) AS count FROM applicants WHERE stage NOT IN ('Enrolled', 'Declined')
-  `).get();
+  `);
 
-  const toursThisWeek = db.prepare(`
-    SELECT COUNT(*) AS count FROM tours_events WHERE date >= ? AND date < date(?, '+7 days')
-  `).get(TODAY, TODAY);
+  // SQLite's date(?, '+7 days') becomes Postgres date arithmetic; cast back
+  // to text so the comparison matches the 'YYYY-MM-DD' TEXT column as before.
+  const toursThisWeek = await get(`
+    SELECT COUNT(*) AS count FROM tours_events WHERE date >= ? AND date < (?::date + INTERVAL '7 days')::date::text
+  `, TODAY, TODAY);
 
-  const enrolledStudents = db.prepare(`
+  const enrolledStudents = await get(`
     SELECT COUNT(*) AS count FROM students WHERE status = 'Active'
-  `).get();
+  `);
 
-  const overdueTuition = db.prepare(`
+  const overdueTuition = await get(`
     SELECT COALESCE(SUM(amount_due - amount_paid), 0) AS total, COUNT(*) AS count
     FROM tuition_invoices WHERE status = 'Overdue'
-  `).get();
+  `);
 
-  const pipelineByStage = db.prepare(`
+  const pipelineByStage = await all(`
     SELECT stage, COUNT(*) AS count FROM applicants GROUP BY stage
-  `).all();
+  `);
 
-  const upcomingInterviews = db.prepare(`
+  const upcomingInterviews = await all(`
     SELECT iv.id, iv.scheduled_at, a.student_name AS applicant_name, a.grade_applying_for,
       u.name AS interviewer_name
     FROM interviews iv
@@ -652,76 +658,83 @@ app.get('/api/dashboard', (req, res) => {
     WHERE iv.status = 'Scheduled'
     ORDER BY iv.scheduled_at ASC
     LIMIT 6
-  `).all();
+  `);
 
-  const upcomingTours = db.prepare(`
+  const upcomingTours = await all(`
     SELECT id, type, title, date, location, capacity, attendees_count
     FROM tours_events
     WHERE date >= ?
     ORDER BY date ASC
     LIMIT 6
-  `).all(TODAY);
+  `, TODAY);
 
-  const recentActivity = db.prepare(`
+  const recentActivity = await all(`
     SELECT ac.id, ac.type, ac.subject, ac.occurred_at, ac.related_type,
       u.name AS owner_name, u.initials AS owner_initials, u.color AS owner_color
     FROM activities ac LEFT JOIN users u ON u.id = ac.owner_user_id
     ORDER BY ac.occurred_at DESC
     LIMIT 8
-  `).all();
+  `);
 
-  const inquiriesBySource = db.prepare(`
+  const inquiriesBySource = await all(`
     SELECT source, COUNT(*) AS count FROM inquiries GROUP BY source ORDER BY count DESC
-  `).all();
+  `);
 
   res.json({
     openInquiries, inPipeline, toursThisWeek, enrolledStudents, overdueTuition,
     pipelineByStage, upcomingInterviews, upcomingTours, recentActivity, inquiriesBySource,
   });
-});
+}));
 
 // ---------- reports ----------
-app.get('/api/reports', (req, res) => {
-  const funnelByStage = db.prepare(`
+app.get('/api/reports', ar(async (req, res) => {
+  const funnelByStage = await all(`
     SELECT stage, COUNT(*) AS count FROM applicants GROUP BY stage
-  `).all();
+  `);
 
-  const tuitionSummary = db.prepare(`
+  const tuitionSummary = await get(`
     SELECT COALESCE(SUM(amount_due), 0) AS total_due, COALESCE(SUM(amount_paid), 0) AS total_paid
     FROM tuition_invoices
-  `).get();
+  `);
 
-  const tuitionByStatus = db.prepare(`
+  const tuitionByStatus = await all(`
     SELECT status, COUNT(*) AS count, COALESCE(SUM(amount_due - amount_paid), 0) AS outstanding
     FROM tuition_invoices GROUP BY status
-  `).all();
+  `);
 
-  const inquiriesBySource = db.prepare(`
+  const inquiriesBySource = await all(`
     SELECT source, COUNT(*) AS count FROM inquiries GROUP BY source ORDER BY count DESC
-  `).all();
+  `);
 
-  const aidByStatus = db.prepare(`
+  const aidByStatus = await all(`
     SELECT status, COUNT(*) AS count, COALESCE(SUM(amount_awarded), 0) AS total_awarded
     FROM financial_aid GROUP BY status
-  `).all();
+  `);
 
-  const studentsByGrade = db.prepare(`
+  const studentsByGrade = await all(`
     SELECT grade, COUNT(*) AS count FROM students WHERE status = 'Active' GROUP BY grade
-  `).all();
+  `);
 
-  const enrollmentConversion = db.prepare(`
+  const enrollmentConversion = await get(`
     SELECT
       (SELECT COUNT(*) FROM inquiries) AS inquiries,
       (SELECT COUNT(*) FROM applicants) AS applicants,
       (SELECT COUNT(*) FROM applicants WHERE stage = 'Enrolled') AS enrolled
-  `).get();
+  `);
 
   res.json({
     funnelByStage, tuitionSummary, tuitionByStatus, inquiriesBySource, aidByStatus,
     studentsByGrade, enrollmentConversion,
   });
-});
+}));
 
-app.listen(PORT, () => {
-  console.log(`Cohort CRM API listening on http://localhost:${PORT}`);
-});
+initSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Cohort API listening on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database schema:', err);
+    process.exit(1);
+  });

@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   role TEXT NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS inquiries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   student_name TEXT NOT NULL,
   grade_applying_for TEXT NOT NULL,
   parent_name TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS inquiries (
 );
 
 CREATE TABLE IF NOT EXISTS applicants (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   inquiry_id INTEGER REFERENCES inquiries(id),
   student_name TEXT NOT NULL,
   grade_applying_for TEXT NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS applicants (
 );
 
 CREATE TABLE IF NOT EXISTS tours_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   type TEXT NOT NULL,
   title TEXT NOT NULL,
   date TEXT NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS tours_events (
 );
 
 CREATE TABLE IF NOT EXISTS interviews (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   applicant_id INTEGER NOT NULL REFERENCES applicants(id),
   interviewer_user_id INTEGER REFERENCES users(id),
   scheduled_at TEXT NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS interviews (
 );
 
 CREATE TABLE IF NOT EXISTS families (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   primary_guardian_name TEXT NOT NULL,
   secondary_guardian_name TEXT,
   email TEXT,
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS families (
 );
 
 CREATE TABLE IF NOT EXISTS students (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   grade TEXT NOT NULL,
   homeroom TEXT,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS students (
 );
 
 CREATE TABLE IF NOT EXISTS tuition_invoices (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   family_id INTEGER NOT NULL REFERENCES families(id),
   term TEXT NOT NULL,
   amount_due INTEGER NOT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS tuition_invoices (
 );
 
 CREATE TABLE IF NOT EXISTS financial_aid (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   family_id INTEGER NOT NULL REFERENCES families(id),
   program TEXT NOT NULL,
   amount_awarded INTEGER,
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS financial_aid (
 );
 
 CREATE TABLE IF NOT EXISTS activities (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   type TEXT NOT NULL,
   subject TEXT NOT NULL,
   related_type TEXT,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS activities (
 );
 
 CREATE TABLE IF NOT EXISTS automations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   trigger_desc TEXT NOT NULL,
   action_desc TEXT NOT NULL,
