@@ -7,7 +7,7 @@ export default function Layout({ title, count, actions, children, flush = false 
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="flex h-screen w-full bg-bg overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-bg overflow-hidden">
       <div className="md:hidden fixed top-0 inset-x-0 z-40 h-14 bg-side text-white flex items-center gap-3 px-4 shadow-md">
         <button
           type="button"

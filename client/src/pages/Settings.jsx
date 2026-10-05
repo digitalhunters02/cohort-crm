@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import api, { BASE } from '../api.js';
 import Layout from '../components/Layout.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { MyAccountCard, StaffCard } from '../auth/AccountPanel.jsx';
 import { Card, CardHead, Avatar, Badge, Spinner, Button, Field, Modal, inputCls } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
 import { downloadCSV } from '../format.js';
@@ -114,6 +116,7 @@ function WhatsAppConnectForm({ onCancel, onSubmit, busy, error }) {
 }
 
 export default function Settings() {
+  const { account } = useAuth();
   const [users, setUsers] = useState(null);
 
   const [whatsapp, setWhatsapp] = useState({ connected: false, displayPhone: null });
@@ -249,6 +252,10 @@ export default function Settings() {
 
   return (
     <Layout title="Settings">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+        <MyAccountCard />
+        {account?.role === 'owner' && <StaffCard />}
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHead

@@ -1,5 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import Icon from './Icon.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { useT } from '../auth/i18n.js';
+import { LogOutIcon } from '../auth/AuthIcons.jsx';
 
 const SECTIONS = [
   {
@@ -51,6 +54,8 @@ export function LogoMark() {
 }
 
 export default function Sidebar({ open = false, onNavigate }) {
+  const { account, logout } = useAuth();
+  const { t } = useT();
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[82vw] flex-shrink-0 bg-side text-sideText flex flex-col min-h-0 shadow-2xl transition-transform duration-300 ease-in-out md:static md:z-auto md:h-full md:w-60 md:max-w-none md:translate-x-0 md:shadow-none ${
@@ -100,7 +105,24 @@ export default function Sidebar({ open = false, onNavigate }) {
         ))}
       </nav>
 
-      <div className="px-4 py-4 border-t border-sideLine flex items-center gap-2.5 flex-shrink-0">
+      <div className="px-4 py-3 border-t border-sideLine flex items-center gap-2.5 flex-shrink-0">
+        <NavLink to="/settings" onClick={onNavigate} title={t('accountTitle')} className="min-w-0 flex-grow">
+          <div className="text-[13px] font-semibold text-white truncate">{account?.name}</div>
+          <div className="text-[11px] text-sideMuted truncate">{account?.role === 'owner' ? t('owner') : t('staff')}</div>
+        </NavLink>
+        <button
+          type="button"
+          onClick={logout}
+          title={t('signOut')}
+          aria-label={t('signOut')}
+          data-testid="signout"
+          className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-sideText hover:bg-sideSoft hover:text-white transition-colors"
+        >
+          <LogOutIcon />
+        </button>
+      </div>
+
+      <div className="px-4 py-3 border-t border-sideLine flex items-center gap-2.5 flex-shrink-0">
         <div className="min-w-0 flex-grow">
           <div className="text-[13px] font-medium text-white truncate">Est. 1987 &middot; Asheville, NC</div>
           <div className="text-[11px] text-sideMuted truncate">Grades K&ndash;12</div>
