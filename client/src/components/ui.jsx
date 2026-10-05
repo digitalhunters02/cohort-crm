@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import Icon from './Icon.jsx';
 import { initialsOf } from '../format.js';
 
@@ -185,17 +186,65 @@ export function Spinner() {
   );
 }
 
+// On phones the on-screen keyboard covers the bottom of the screen but the page itself does not shrink
+// (iOS/Android keep the 'layout viewport' full height), so a centered modal ends up with its fields hidden
+// behind the keyboard and nothing to scroll. We follow the *visual* viewport instead: the overlay is
+// sized/positioned to the visible area (--vvh / --vvt on <html>), the dialog scrolls inside it, the page
+// behind is frozen on touch devices, and the field that gets focus is scrolled into view.
+// Reference-counted, so stacked modals (form + confirm) share one set of listeners.
+let kbUsers = 0;
+let kbRestore = null;
+export function useKeyboardSafeViewport() {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    const sync = () => {
+      if (!vv) return;
+      root.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+      root.style.setProperty('--vvt', `${Math.round(vv.offsetTop)}px`);
+    };
+    if (kbUsers++ === 0 && getComputedStyle(document.body).position !== 'fixed' && window.matchMedia?.('(pointer: coarse)').matches) {
+      const prev = root.style.overflow;
+      root.style.overflow = 'hidden'; // page behind the modal must not scroll (touch devices only: no scrollbar jump on desktop; skipped when the app already pins <body>)
+      kbRestore = () => { root.style.overflow = prev; };
+    }
+    sync();
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      if (--kbUsers === 0) {
+        root.style.removeProperty('--vvh');
+        root.style.removeProperty('--vvt');
+        if (kbRestore) { kbRestore(); kbRestore = null; }
+      }
+    };
+  }, []);
+}
+
+// onFocusCapture handler for the dialog: once the keyboard animation is done, bring the field to the middle of the visible area.
+export function revealFocusedField(e) {
+  const el = e.target;
+  if (!el || !/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+  setTimeout(() => el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }), 320);
+}
+
 export function Modal({ title, sub, onClose, children, wide = false }) {
+  useKeyboardSafeViewport();
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-ink/40"
+      style={{ top: 'var(--vvt, 0px)', height: 'var(--vvh, 100%)' }}
       onClick={onClose}
     >
       <div
-        className={`bg-surface border border-line rounded-xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}
+        className={`bg-surface border border-line rounded-xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[min(90vh,100%)] overflow-y-auto overscroll-contain`}
+        style={{ touchAction: 'pan-y pinch-zoom', WebkitOverflowScrolling: 'touch' }}
         onClick={(e) => e.stopPropagation()}
+        onFocusCapture={revealFocusedField}
       >
-        <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-lineSoft sticky top-0 bg-surface">
+        <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-lineSoft sticky top-0 z-10 bg-surface">
           <div>
             <h3 className="font-serif text-[15px] font-semibold text-ink">{title}</h3>
             {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
