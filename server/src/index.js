@@ -7,6 +7,7 @@ import { get, all, run, initSchema } from './db.js';
 import * as whatsapp from './whatsapp.js';
 import { requireAuth, requireOwner, bootstrapOwner } from './auth.js';
 import { publicAuthRoutes, accountRoutes } from './authRoutes.js';
+import { mountAdminSummary } from './adminSummary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.join(__dirname, '..', '..', 'client', 'dist');
@@ -42,6 +43,9 @@ app.get('/api/health', ar(async (_req, res) => {
 }));
 
 publicAuthRoutes(app, ar);
+
+// Machine-to-machine: Harbor reads this with X-Admin-Key (see adminSummary.js).
+mountAdminSummary(app, ar, get);
 
 // Meta calls the webhook directly (verification handshake, then message
 // delivery), so it can't carry our bearer token. GET is guarded by the verify
