@@ -5,6 +5,8 @@ import {
   Card, Table, CellName, Spinner, Button, Modal, Field, inputCls, RowActions, ConfirmDialog,
 } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
+import { PortalLinkModal } from './ProModals.jsx';
+import { usePlan } from '../plans/PlanContext.jsx';
 import { downloadCSV } from '../format.js';
 
 const EMPTY_FORM = { primary_guardian_name: '', secondary_guardian_name: '', email: '', phone: '', address: '', notes: '' };
@@ -15,6 +17,8 @@ export default function Families() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const { allows } = usePlan();
+  const [portalFor, setPortalFor] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
@@ -93,7 +97,12 @@ export default function Families() {
     { key: 'email', label: 'Email', render: (r) => r.email || '—' },
     { key: 'phone', label: 'Phone', render: (r) => r.phone || '—' },
     { key: 'address', label: 'Address', render: (r) => r.address || '—' },
-    { key: 'actions', label: '', align: 'right', render: (r) => <RowActions onEdit={() => openEdit(r)} onDelete={() => setDeleteTarget(r)} /> },
+    { key: 'actions', label: '', align: 'right', render: (r) => (
+      <div className="flex items-center justify-end gap-1.5">
+        {allows('family_portal') && <Button size="sm" variant="ghost" onClick={() => setPortalFor(r)}>Portal link</Button>}
+        <RowActions onEdit={() => openEdit(r)} onDelete={() => setDeleteTarget(r)} />
+      </div>
+    ) },
   ];
 
   return (
@@ -147,6 +156,7 @@ export default function Families() {
         </Modal>
       )}
 
+      {portalFor && <PortalLinkModal family={portalFor} onClose={() => setPortalFor(null)} />}
       {deleteTarget && (
         <ConfirmDialog
           title="Delete family?"

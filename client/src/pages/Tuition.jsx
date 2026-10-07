@@ -5,6 +5,8 @@ import {
   Card, Table, CellName, Badge, Spinner, Button, Modal, Field, inputCls, RowActions, ConfirmDialog,
 } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
+import { PaymentPlanModal } from './ProModals.jsx';
+import { usePlan } from '../plans/PlanContext.jsx';
 import { money, shortDate, downloadCSV } from '../format.js';
 import { TUITION_STATUSES, TUITION_STATUS_TONE } from '../constants.js';
 
@@ -17,6 +19,8 @@ export default function Tuition() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const { allows } = usePlan();
+  const [planOpen, setPlanOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
@@ -110,6 +114,11 @@ export default function Tuition() {
           <Button variant="outline" onClick={() => downloadCSV('cohort-tuition-invoices.csv', invoices)}>
             <Icon name="download" size={14} /> Export
           </Button>
+          {allows('payment_plans') && (
+            <Button variant="outline" onClick={() => setPlanOpen(true)} disabled={families.length === 0}>
+              <Icon name="calendar" size={14} /> Payment plan
+            </Button>
+          )}
           <Button variant="brand" onClick={openCreate} disabled={families.length === 0}>
             <Icon name="plus" size={15} /> New Invoice
           </Button>
@@ -156,6 +165,7 @@ export default function Tuition() {
         </Modal>
       )}
 
+      {planOpen && <PaymentPlanModal families={families} onClose={() => setPlanOpen(false)} onCreated={() => { setPlanOpen(false); api.invoices().then(setInvoices); }} />}
       {deleteTarget && (
         <ConfirmDialog
           title="Delete invoice?"

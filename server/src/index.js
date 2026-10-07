@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get, all, run, initSchema } from './db.js';
 import * as whatsapp from './whatsapp.js';
+import { mountCohortPublic, mountCohortPro } from './cohortPro.js';
 import { requireAuth, requireOwner, bootstrapOwner } from './auth.js';
 import { publicAuthRoutes, accountRoutes } from './authRoutes.js';
 import { mountAdminSummary } from './adminSummary.js';
@@ -51,6 +52,7 @@ mountAdminSummary(app, ar, get, billing.getAdminSummary);
 
 // Stripe da Impact Digital chama este webhook direto (assinatura conferida em billing.js).
 mountBillingWebhook(app, ar);
+mountCohortPublic(app);
 
 // Meta calls the webhook directly (verification handshake, then message
 // delivery), so it can't carry our bearer token. GET is guarded by the verify
@@ -83,6 +85,7 @@ accountRoutes(app, ar);
 // Plano e cobrança: status para todos, escolher plano só o dono; depois, as barreiras por plano de cada rota.
 mountBilling(app, ar, requireOwner);
 app.use(billing.planGates());
+mountCohortPro(app);
 
 // "Today" the seed data's near-term dates are anchored to, so relative-date
 // math (upcoming tours, overdue tuition, etc.) stays sensible regardless of

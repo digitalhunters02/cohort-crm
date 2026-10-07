@@ -18,11 +18,20 @@ export const FEATURE_MIN_PLAN = {
   financial_aid: 'essencial',
   tuition: 'essencial',
   reports: 'essencial',
+  online_application: 'essencial',
+  recommendations: 'essencial',
+  seats: 'essencial',
+  payment_plans: 'completo',
+  family_portal: 'completo',
+  enrollment_contract: 'completo',
   automations: 'completo',
   whatsapp: 'completo',
 };
 // Rotas da API protegidas por plano: [prefixo, recurso]. Valem só depois do login.
 export const API_GATES = [
+  ['/api/seats', 'seats'],
+  ['/api/tuition-plans', 'payment_plans'],
+  ['/api/contracts', 'enrollment_contract'],
   ['/api/interviews', 'interviews'],
   ['/api/financial-aid', 'financial_aid'],
   ['/api/tuition-invoices', 'tuition'],

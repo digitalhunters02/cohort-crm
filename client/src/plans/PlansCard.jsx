@@ -15,10 +15,13 @@ const BULLETS = {
     "Everything in Essential",
     "Interviews and financial aid",
     "Tuition invoices and reports",
+    "Online inquiry form and teacher recommendation links",
+    "Seats and capacity by grade",
     "Up to 200 students"
   ],
   "completo": [
     "Everything in Professional",
+    "Payment plans, family portal and e-signed contracts",
     "Automations and WhatsApp",
     "Up to 600 students"
   ]

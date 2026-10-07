@@ -17,6 +17,7 @@ const SECTIONS = [
       { to: '/inquiries', label: 'Inquiries', icon: 'mail' },
       { to: '/pipeline', label: 'Pipeline', icon: 'kanban' },
       { to: '/tours', label: 'Tours & Events', icon: 'calendar' },
+      { to: '/seats', label: 'Seats & Capacity', icon: 'building', feature: 'seats' },
       { to: '/interviews', label: 'Interviews', icon: 'userCheck', feature: 'interviews' },
     ],
   },
@@ -25,6 +26,7 @@ const SECTIONS = [
     items: [
       { to: '/students', label: 'Students', icon: 'graduationCap' },
       { to: '/families', label: 'Families', icon: 'users' },
+      { to: '/contracts', label: 'Contracts', icon: 'fileCheck', feature: 'enrollment_contract' },
     ],
   },
   {

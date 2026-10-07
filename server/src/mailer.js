@@ -36,3 +36,16 @@ export async function sendPasswordResetEmail(to, resetUrl) {
   });
   return true;
 }
+
+// E-mail genérico com um botão/link (recomendação, contrato, portal). Sem SMTP devolve false: o link continua válido.
+export async function sendLinkEmail(to, { subject, intro, url, cta }) {
+  if (!transporter) return false;
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || `${APP_NAME} <no-reply@impactdigital.network>`,
+    to,
+    subject,
+    html: `<p>${esc(intro)}</p><p><a href="${esc(url)}">${esc(cta)}</a></p>`,
+  });
+  return true;
+}

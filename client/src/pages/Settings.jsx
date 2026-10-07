@@ -4,6 +4,7 @@ import Layout from '../components/Layout.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { MyAccountCard, StaffCard } from '../auth/AccountPanel.jsx';
 import PlansCard from '../plans/PlansCard.jsx';
+import { ApplyLinkCard } from './ProModals.jsx';
 import { Card, CardHead, Avatar, Badge, Spinner, Button, Field, Modal, inputCls } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
 import { downloadCSV } from '../format.js';
@@ -257,6 +258,7 @@ export default function Settings() {
         <MyAccountCard />
         {account?.role === 'owner' && <StaffCard />}
         <PlansCard />
+        <ApplyLinkCard />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">

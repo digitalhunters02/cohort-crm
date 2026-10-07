@@ -4,6 +4,8 @@ import Layout from '../components/Layout.jsx';
 import {
   Card, Avatar, Spinner, Dot, Button, Modal, Field, inputCls, IconButton, ConfirmDialog,
 } from '../components/ui.jsx';
+import { RecommendationsModal } from './ProModals.jsx';
+import { usePlan } from '../plans/PlanContext.jsx';
 import Icon from '../components/Icon.jsx';
 import { shortDate } from '../format.js';
 import { STAGE_COLORS, STAGES, GRADES } from '../constants.js';
@@ -18,6 +20,8 @@ export default function Pipeline() {
   const [users, setUsers] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [modal, setModal] = useState(null);
+  const { allows } = usePlan();
+  const [recFor, setRecFor] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -143,6 +147,7 @@ export default function Pipeline() {
                         <div className="text-xs text-muted truncate">{a.grade_applying_for} &middot; {a.parent_name}</div>
                       </div>
                       <div className="flex items-center gap-0.5 flex-shrink-0">
+                        {allows('recommendations') && <IconButton icon="mail" title="Teacher recommendations" onClick={() => setRecFor(a)} />}
                         <IconButton icon="edit" title="Edit" onClick={() => openEdit(a)} />
                         <IconButton icon="trash" title="Delete" tone="danger" onClick={() => setDeleteTarget(a)} />
                       </div>
@@ -237,6 +242,7 @@ export default function Pipeline() {
           onConfirm={handleDelete}
         />
       )}
+      {recFor && <RecommendationsModal applicant={recFor} onClose={() => setRecFor(null)} />}
     </Layout>
   );
 }

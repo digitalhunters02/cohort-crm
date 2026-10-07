@@ -163,3 +163,40 @@ CREATE TABLE IF NOT EXISTS subscription (
   stripe_subscription_id TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Recursos pro (Essencial/Completo): inscrição online, recomendação por link, vagas por série, portal da família, contratos
+ALTER TABLE families ADD COLUMN IF NOT EXISTS portal_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS families_portal_token_uq ON families (portal_token) WHERE portal_token IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS recommendations (
+  id SERIAL PRIMARY KEY,
+  applicant_id INTEGER NOT NULL REFERENCES applicants(id) ON DELETE CASCADE,
+  recommender_name TEXT NOT NULL,
+  recommender_email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'Requested',
+  ratings TEXT,
+  recommend TEXT,
+  comments TEXT,
+  signed_by TEXT,
+  submitted_at TIMESTAMPTZ,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS grade_capacity (
+  grade TEXT PRIMARY KEY,
+  seats INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS contracts (
+  id SERIAL PRIMARY KEY,
+  family_id INTEGER NOT NULL REFERENCES families(id),
+  student_name TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'Sent',
+  signed_by TEXT,
+  signed_at TIMESTAMPTZ,
+  created_at TEXT NOT NULL
+);

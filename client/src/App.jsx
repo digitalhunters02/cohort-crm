@@ -15,6 +15,9 @@ import WhatsApp from './pages/WhatsApp.jsx';
 import Login from './pages/Login.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import { Terms, Privacy } from './pages/Legal.jsx';
+import Seats from './pages/Seats.jsx';
+import Contracts from './pages/Contracts.jsx';
+import { Apply, Recommend, Portal, Contract } from './pages/PublicPages.jsx';
 import PlanGate from './plans/PlanGate.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import ForcedPasswordChange from './auth/ForcedPasswordChange.jsx';
@@ -35,6 +38,10 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/apply" element={<Apply />} />
+        <Route path="/recommend/:token" element={<Recommend />} />
+        <Route path="/portal/:token" element={<Portal />} />
+        <Route path="/contract/:token" element={<Contract />} />
         <Route path="*" element={<Login />} />
       </Routes>
     );
@@ -48,11 +55,17 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/apply" element={<Apply />} />
+      <Route path="/recommend/:token" element={<Recommend />} />
+      <Route path="/portal/:token" element={<Portal />} />
+      <Route path="/contract/:token" element={<Contract />} />
       <Route path="/" element={<Dashboard />} />
       <Route path="/inquiries" element={<Inquiries />} />
       <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/tours" element={<ToursEvents />} />
       <Route path="/interviews" element={<PlanGate feature="interviews" title="Interviews"><Interviews /></PlanGate>} />
+      <Route path="/seats" element={<PlanGate feature="seats" title="Seats & Capacity"><Seats /></PlanGate>} />
+      <Route path="/contracts" element={<PlanGate feature="enrollment_contract" title="Contracts"><Contracts /></PlanGate>} />
       <Route path="/students" element={<Students />} />
       <Route path="/families" element={<Families />} />
       <Route path="/tuition" element={<PlanGate feature="tuition" title="Tuition"><Tuition /></PlanGate>} />
