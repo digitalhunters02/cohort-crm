@@ -3,6 +3,8 @@ import Icon from './Icon.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useT } from '../auth/i18n.js';
 import { LogOutIcon } from '../auth/AuthIcons.jsx';
+import { usePlan } from '../plans/PlanContext.jsx';
+import { LockIcon } from '../plans/PlanGate.jsx';
 
 const SECTIONS = [
   {
@@ -15,7 +17,7 @@ const SECTIONS = [
       { to: '/inquiries', label: 'Inquiries', icon: 'mail' },
       { to: '/pipeline', label: 'Pipeline', icon: 'kanban' },
       { to: '/tours', label: 'Tours & Events', icon: 'calendar' },
-      { to: '/interviews', label: 'Interviews', icon: 'userCheck' },
+      { to: '/interviews', label: 'Interviews', icon: 'userCheck', feature: 'interviews' },
     ],
   },
   {
@@ -28,16 +30,16 @@ const SECTIONS = [
   {
     label: 'Finance',
     items: [
-      { to: '/tuition', label: 'Tuition & Billing', icon: 'dollar' },
-      { to: '/financial-aid', label: 'Financial Aid', icon: 'award' },
+      { to: '/tuition', label: 'Tuition & Billing', icon: 'dollar', feature: 'tuition' },
+      { to: '/financial-aid', label: 'Financial Aid', icon: 'award', feature: 'financial_aid' },
     ],
   },
   {
     label: 'System',
     items: [
-      { to: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
-      { to: '/automations', label: 'Automations', icon: 'zap' },
-      { to: '/reports', label: 'Reports', icon: 'barChart' },
+      { to: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp', feature: 'whatsapp' },
+      { to: '/automations', label: 'Automations', icon: 'zap', feature: 'automations' },
+      { to: '/reports', label: 'Reports', icon: 'barChart', feature: 'reports' },
       { to: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },
@@ -56,6 +58,7 @@ export function LogoMark() {
 export default function Sidebar({ open = false, onNavigate }) {
   const { account, logout } = useAuth();
   const { t } = useT();
+  const { allows } = usePlan();
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[82vw] flex-shrink-0 bg-side text-sideText flex flex-col min-h-0 shadow-2xl transition-transform duration-300 ease-in-out md:static md:z-auto md:h-full md:w-60 md:max-w-none md:translate-x-0 md:shadow-none ${
@@ -96,6 +99,7 @@ export default function Sidebar({ open = false, onNavigate }) {
                       )}
                       <Icon name={item.icon} size={16} />
                       <span>{item.label}</span>
+                      {item.feature && !allows(item.feature) && <LockIcon size={12} className="ml-auto text-sideMuted" />}
                     </>
                   )}
                 </NavLink>

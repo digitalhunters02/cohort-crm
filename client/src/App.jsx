@@ -15,6 +15,7 @@ import WhatsApp from './pages/WhatsApp.jsx';
 import Login from './pages/Login.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import { Terms, Privacy } from './pages/Legal.jsx';
+import PlanGate from './plans/PlanGate.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import ForcedPasswordChange from './auth/ForcedPasswordChange.jsx';
 import { useT } from './auth/i18n.js';
@@ -51,14 +52,14 @@ export default function App() {
       <Route path="/inquiries" element={<Inquiries />} />
       <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/tours" element={<ToursEvents />} />
-      <Route path="/interviews" element={<Interviews />} />
+      <Route path="/interviews" element={<PlanGate feature="interviews" title="Interviews"><Interviews /></PlanGate>} />
       <Route path="/students" element={<Students />} />
       <Route path="/families" element={<Families />} />
-      <Route path="/tuition" element={<Tuition />} />
-      <Route path="/financial-aid" element={<FinancialAid />} />
-      <Route path="/whatsapp" element={<WhatsApp />} />
-      <Route path="/automations" element={<Automations />} />
-      <Route path="/reports" element={<Reports />} />
+      <Route path="/tuition" element={<PlanGate feature="tuition" title="Tuition"><Tuition /></PlanGate>} />
+      <Route path="/financial-aid" element={<PlanGate feature="financial_aid" title="Financial Aid"><FinancialAid /></PlanGate>} />
+      <Route path="/whatsapp" element={<PlanGate feature="whatsapp" title="WhatsApp"><WhatsApp /></PlanGate>} />
+      <Route path="/automations" element={<PlanGate feature="automations" title="Automations"><Automations /></PlanGate>} />
+      <Route path="/reports" element={<PlanGate feature="reports" title="Reports"><Reports /></PlanGate>} />
       <Route path="/settings" element={<Settings />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

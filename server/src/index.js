@@ -8,6 +8,8 @@ import * as whatsapp from './whatsapp.js';
 import { requireAuth, requireOwner, bootstrapOwner } from './auth.js';
 import { publicAuthRoutes, accountRoutes } from './authRoutes.js';
 import { mountAdminSummary } from './adminSummary.js';
+import * as billing from './billing.js';
+import { mountBillingWebhook, mountBilling } from './billingRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.join(__dirname, '..', '..', 'client', 'dist');
@@ -45,7 +47,10 @@ app.get('/api/health', ar(async (_req, res) => {
 publicAuthRoutes(app, ar);
 
 // Machine-to-machine: Harbor reads this with X-Admin-Key (see adminSummary.js).
-mountAdminSummary(app, ar, get);
+mountAdminSummary(app, ar, get, billing.getAdminSummary);
+
+// Stripe da Impact Digital chama este webhook direto (assinatura conferida em billing.js).
+mountBillingWebhook(app, ar);
 
 // Meta calls the webhook directly (verification handshake, then message
 // delivery), so it can't carry our bearer token. GET is guarded by the verify
@@ -74,6 +79,10 @@ app.post('/api/integrations/whatsapp/webhook', ar(async (req, res) => {
 // ==================== everything below requires a login ====================
 app.use('/api', requireAuth);
 accountRoutes(app, ar);
+
+// Plano e cobrança: status para todos, escolher plano só o dono; depois, as barreiras por plano de cada rota.
+mountBilling(app, ar, requireOwner);
+app.use(billing.planGates());
 
 // "Today" the seed data's near-term dates are anchored to, so relative-date
 // math (upcoming tours, overdue tuition, etc.) stays sensible regardless of
