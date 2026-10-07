@@ -87,6 +87,19 @@ test('LICENSED_PLAN manda: básico trava o meio e o topo e limita os logins', as
   await stop(s);
 });
 
+test('Cohort: limite de alunos ativos por plano (50 no básico)', async () => {
+  const s = await start({ LICENSED_PLAN: 'basico' });
+  const st = (await s.call('GET', '/api/billing/status', { token: s.token })).json;
+  assert.equal(st.limits.students.limit, 50);
+  const fam = (await s.call('GET', '/api/families', { token: s.token })).json[0];
+  // enche até o limite pelo banco e confere que o 51º é recusado
+  const db = new pg.Client({ connectionString: DB_URL }); await db.connect();
+  await db.query(`INSERT INTO students (name, grade, family_id, enrollment_date, status) SELECT 'Filler ' || g, '5', $1, '2025-09-01', 'Active' FROM generate_series(1, $2) g`, [fam.id, Math.max(0, 50 - (await db.query(`SELECT COUNT(*)::int AS n FROM students WHERE status = 'Active'`)).rows[0].n)]);
+  const over = await s.call('POST', '/api/students', { token: s.token, body: { name: 'One Too Many', grade: '5', family_id: fam.id } });
+  assert.equal(over.status, 402); assert.equal(over.json.code, 'student_limit');
+  await db.end(); await stop(s);
+});
+
 test('essencial libera o meio e não o topo; completo libera tudo', async () => {
   let s = await start({ LICENSED_PLAN: 'essencial' });
   assert.notEqual((await s.call('GET', MID_PATH, { token: s.token })).status, 402);

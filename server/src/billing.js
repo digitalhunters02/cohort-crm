@@ -128,7 +128,13 @@ export async function status() {
   const features = {};
   for (const f of Object.keys(FEATURE_MIN_PLAN)) features[f] = allowsFeature(plan, f);
   const lim = PLAN_USER_LIMITS[plan];
+  const extra = {};
+  for (const kind of Object.keys(PLAN_EXTRA_LIMITS || {})) {
+    const l = PLAN_EXTRA_LIMITS[kind][plan];
+    extra[kind] = { limit: Number.isFinite(l) ? l : null, used: kind === 'students' ? (await get(`SELECT COUNT(*)::int AS n FROM students WHERE status = 'Active'`)).n : null };
+  }
   return {
+    limits: extra,
     configured: isConfigured(),
     licensed: !!licensedPlan(),
     plan,

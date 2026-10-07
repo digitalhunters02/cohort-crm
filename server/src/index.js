@@ -483,6 +483,12 @@ app.get('/api/students', ar(async (req, res) => {
 app.post('/api/students', ar(async (req, res) => {
   const { name, grade, homeroom, family_id, enrollment_date, status } = req.body;
   if (!name || !grade || !family_id) return badRequest(res, 'name, grade, and family_id are required');
+  // Limite de alunos ativos do plano (50 / 200 / 600).
+  const studentLimit = await billing.extraLimit('students');
+  if (Number.isFinite(studentLimit)) {
+    const { n } = await get(`SELECT COUNT(*)::int AS n FROM students WHERE status = 'Active'`);
+    if (n >= studentLimit) return res.status(402).json({ error: `Your plan allows up to ${studentLimit} active students. Upgrade your plan to enroll more.`, code: 'student_limit', studentLimit });
+  }
   try {
     const info = await run(`
       INSERT INTO students (name, grade, homeroom, family_id, enrollment_date, status)
