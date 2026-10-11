@@ -255,8 +255,8 @@ export default function Settings() {
   return (
     <Layout title="Settings">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <MyAccountCard />
         {account?.role === 'owner' && <StaffCard />}
+        <MyAccountCard />
         <PlansCard />
         <ApplyLinkCard />
       </div>
