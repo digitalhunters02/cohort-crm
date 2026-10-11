@@ -2,6 +2,10 @@
 // descriptors drawn on a 24x24 grid: ["path", d] | ["circle", cx, cy, r] |
 // ["line", x1, y1, x2, y2] | ["rect", x, y, w, h, rx]
 const ICONS = {
+  camera: [
+    ['path', 'M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z'],
+    ['circle', 12, 13, 4],
+  ],
   home: [
     ['path', 'M4 12 12 5l8 7'],
     ['path', 'M6 10.5V19a1 1 0 0 0 1 1h4v-5.5h2V20h4a1 1 0 0 0 1-1v-8.5'],

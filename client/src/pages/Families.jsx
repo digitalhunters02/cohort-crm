@@ -5,6 +5,7 @@ import {
   Card, Table, CellName, Spinner, Button, Modal, Field, inputCls, RowActions, ConfirmDialog,
 } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
+import PhotoImportButton from '../components/PhotoImportButton.jsx';
 import { PortalLinkModal } from './ProModals.jsx';
 import { usePlan } from '../plans/PlanContext.jsx';
 import { downloadCSV } from '../format.js';
@@ -114,6 +115,16 @@ export default function Families() {
           <Button variant="outline" onClick={() => downloadCSV('cohort-families.csv', families)}>
             <Icon name="download" size={14} /> Export
           </Button>
+          <PhotoImportButton
+            kind="clients" title="Import families from a photo" onImported={() => api.families().then(setFamilies)}
+            fields={[
+              { key: 'name', label: 'Guardian name' }, { key: 'phone', label: 'photo.f.phone' }, { key: 'email', label: 'photo.f.email' },
+              { key: 'address', label: 'photo.f.address', wide: true }, { key: 'notes', label: 'photo.f.notes', wide: true },
+            ]}
+            validate={(r) => (String(r.name || '').trim() ? '' : 'photo.missingName')}
+            toPayload={(r) => ({ name: r.name.trim(), phone: r.phone || '', email: r.email || '', address: r.address || '', notes: r.notes || '' })}
+            onSave={(b) => api.createFamily({ primary_guardian_name: b.name, email: b.email || null, phone: b.phone || null, address: b.address || null, notes: b.notes || null })}
+          />
           <Button variant="brand" onClick={openCreate}>
             <Icon name="plus" size={15} /> New Family
           </Button>

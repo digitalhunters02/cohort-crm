@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import Icon from './Icon.jsx';
 import { initialsOf } from '../format.js';
 
-export function Button({ children, onClick, variant = 'solid', size = 'md', className = '', type = 'button', disabled = false }) {
+export function Button({ children, onClick, variant = 'solid', size = 'md', className = '', type = 'button', disabled = false, ...rest }) {
   const sizes = { sm: 'text-xs px-2.5 py-1.5', md: 'text-sm px-3.5 py-2' };
   const variants = {
     solid: 'bg-ink text-white hover:bg-black',
@@ -17,6 +17,7 @@ export function Button({ children, onClick, variant = 'solid', size = 'md', clas
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${sizes[size]} ${variants[variant]} ${className}`}
+      {...rest}
     >
       {children}
     </button>

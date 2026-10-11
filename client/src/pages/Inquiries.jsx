@@ -6,6 +6,7 @@ import {
   RowActions, ConfirmDialog,
 } from '../components/ui.jsx';
 import Icon from '../components/Icon.jsx';
+import PhotoImportButton from '../components/PhotoImportButton.jsx';
 import { shortDate, downloadCSV } from '../format.js';
 import { INQUIRY_STATUS_TONE, INQUIRY_STATUSES, INQUIRY_SOURCES, GRADES } from '../constants.js';
 
@@ -119,6 +120,25 @@ export default function Inquiries() {
           <Button variant="outline" onClick={() => downloadCSV('cohort-inquiries.csv', inquiries)}>
             <Icon name="download" size={14} /> Export
           </Button>
+          <PhotoImportButton
+            kind="leads" title="Import inquiries from a photo" onImported={() => api.inquiries().then(setInquiries)}
+            fields={[
+              { key: 'name', label: 'Parent / guardian' }, { key: 'phone', label: 'photo.f.phone' }, { key: 'email', label: 'photo.f.email' },
+              { key: 'source', label: 'photo.f.source', type: 'select', options: INQUIRY_SOURCES.map((v) => ({ value: v, label: v })) },
+              { key: 'interest', label: 'Student and grade', wide: true },
+            ]}
+            validate={(r) => (String(r.name || '').trim() ? '' : 'photo.missingName')}
+            toPayload={(r) => ({ name: r.name.trim(), phone: r.phone || '', email: r.email || '', source: INQUIRY_SOURCES.includes(r.source) ? r.source : 'Other', interest: r.interest || '' })}
+            onSave={(b) => {
+              // The inquiry record needs a student and a grade: read them from "Student, 3rd grade" when present, edit later otherwise.
+              const grade = GRADES.find((g) => new RegExp(`\\b${g.split(' ')[0].replace('-', '-?')}\\b`, 'i').test(b.interest)) || GRADES[1];
+              const student = b.interest.replace(/[,;(].*$/, '').trim() || b.name;
+              return api.createInquiry({
+                student_name: student, grade_applying_for: grade, parent_name: b.name, parent_email: b.email || null, parent_phone: b.phone || null,
+                source: b.source, status: 'New', notes: b.interest ? `From photo: ${b.interest}` : null,
+              });
+            }}
+          />
           <Button variant="brand" onClick={openCreate}>
             <Icon name="plus" size={15} /> New Inquiry
           </Button>
