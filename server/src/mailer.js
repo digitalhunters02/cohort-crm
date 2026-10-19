@@ -49,3 +49,10 @@ export async function sendLinkEmail(to, { subject, intro, url, cta }) {
   });
   return true;
 }
+
+// Generic notice (usage warnings). Plain text; falls back to the server log when SMTP is not set.
+export async function sendNoticeEmail(to, subject, text) {
+  if (!transporter) { console.log(`[notice] SMTP not configured. To ${to}: ${subject}`); return false; }
+  await transporter.sendMail({ from: process.env.SMTP_FROM || `${APP_NAME} <no-reply@impactdigital.network>`, to, subject, text });
+  return true;
+}

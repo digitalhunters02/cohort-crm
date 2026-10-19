@@ -3,8 +3,10 @@ import cors from 'cors';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { get, all, run, initSchema } from './db.js';
+import pool, { get, all, run, initSchema } from './db.js';
 import * as whatsapp from './whatsapp.js';
+import { createPhotoImportRouter, initPhotoImportSchema, startPhotoBilling } from './photoImportRouter.js';
+import { sendNoticeEmail } from './mailer.js';
 import { mountCohortPublic, mountCohortPro } from './cohortPro.js';
 import { requireAuth, requireOwner, bootstrapOwner } from './auth.js';
 import { publicAuthRoutes, accountRoutes } from './authRoutes.js';
@@ -86,6 +88,16 @@ accountRoutes(app, ar);
 mountBilling(app, ar, requireOwner);
 app.use(billing.planGates());
 mountCohortPro(app);
+
+// "Importar de foto" (AI reads a photo/print, the person reviews before saving) + extra use by credits.
+app.use('/api/photo-import', createPhotoImportRouter({
+  pool, requireAuth, requireAdmin: requireOwner,
+  effectivePlan: billing.effectivePlan, getSubscription: billing.getSubscription,
+  planLimits: { basico: 0, essencial: 100, completo: 500 },
+  kindsOpts: { contactTypes: ['parent'], leadSources: ['Website', 'Referral', 'School Fair', 'Open House', 'Other'], disableKinds: ['expense'], clientsPage: 'families', leadsPage: 'inquiries' },
+  adminWhere: "role = 'owner'", isAdmin: (a) => a?.role === 'owner',
+  appName: 'Cohort', sendNotice: sendNoticeEmail,
+}));
 
 // "Today" the seed data's near-term dates are anchored to, so relative-date
 // math (upcoming tours, overdue tuition, etc.) stays sensible regardless of
@@ -869,11 +881,13 @@ app.use((err, _req, res, next) => {
 });
 
 initSchema()
+  .then(() => initPhotoImportSchema(pool))
   .then(() => bootstrapOwner())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Cohort API listening on http://localhost:${PORT}`);
     });
+    startPhotoBilling({ pool, getSubscription: billing.getSubscription });
   })
   .catch((err) => {
     console.error('Failed to initialize database schema:', err);
