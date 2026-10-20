@@ -92,7 +92,7 @@ mountCohortPro(app);
 
 // "Importar de foto" (AI reads a photo/print, the person reviews before saving) + extra use by credits.
 app.use('/api/photo-import', createPhotoImportRouter({
-  pool, requireAuth, requireAdmin: (req, res, next) => requireOwner(req, res, () => blockInPreview(req, res, next)),
+  pool, requireAuth, requireAdmin: (req, res, next) => requireOwner(req, res, (err) => (err ? next(err) : blockInPreview(req, res, next))),
   effectivePlan: billing.effectivePlan, getSubscription: billing.getSubscription,
   planLimits: { basico: 0, essencial: 100, completo: 500 }, // leituras de foto por mês, por plano
   kindsOpts: { contactTypes: ['parent'], leadSources: ['Website', 'Referral', 'School Fair', 'Open House', 'Other'], disableKinds: ['expense'], clientsPage: 'families', leadsPage: 'inquiries' },
