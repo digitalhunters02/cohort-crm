@@ -7,16 +7,21 @@ import { authHeaders, handleUnauthorized } from './auth/session.js';
 // into Meta's WhatsApp console.
 export const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
 
-async function handle(r) {
+async function handle(r, isRead = false) {
   // A rejected session (expired, password changed elsewhere) signs the user out.
   if (r.status === 401) handleUnauthorized();
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+  if (!r.ok) {
+    // Recurso de plano maior: o app abre a janelinha "Disponível no plano X" (plans/PlanContext.jsx) em vez de só mostrar o erro.
+    // (só para ações da pessoa; leituras de tela já são protegidas pelo PlanGate e não devem abrir janelinha sozinhas)
+    if (!isRead && r.status === 402 && data.code === 'plan_required') window.dispatchEvent(new CustomEvent('plan-required', { detail: { gate: data.feature } }));
+    throw new Error(data.error || `Request failed (${r.status})`);
+  }
   return data;
 }
 
 function get(path) {
-  return fetch(BASE + path, { headers: authHeaders() }).then(handle);
+  return fetch(BASE + path, { headers: authHeaders() }).then((r) => handle(r, true));
 }
 
 function post(path, body) {

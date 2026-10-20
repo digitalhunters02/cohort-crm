@@ -4,7 +4,9 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useT } from '../auth/i18n.js';
 import { LogOutIcon } from '../auth/AuthIcons.jsx';
 import { usePlan } from '../plans/PlanContext.jsx';
-import { LockIcon } from '../plans/PlanGate.jsx';
+import PlanBadge, { usePlanGate } from '../plans/PlanBadge.jsx';
+import PlanPreview from '../plans/PlanPreview.jsx';
+import { NAV_GATES } from '../plans/planConfig.js';
 
 const SECTIONS = [
   {
@@ -17,8 +19,8 @@ const SECTIONS = [
       { to: '/inquiries', label: 'Inquiries', icon: 'mail' },
       { to: '/pipeline', label: 'Pipeline', icon: 'kanban' },
       { to: '/tours', label: 'Tours & Events', icon: 'calendar' },
-      { to: '/seats', label: 'Seats & Capacity', icon: 'building', feature: 'seats' },
-      { to: '/interviews', label: 'Interviews', icon: 'userCheck', feature: 'interviews' },
+      { to: '/seats', label: 'Seats & Capacity', icon: 'building' },
+      { to: '/interviews', label: 'Interviews', icon: 'userCheck' },
     ],
   },
   {
@@ -26,26 +28,64 @@ const SECTIONS = [
     items: [
       { to: '/students', label: 'Students', icon: 'graduationCap' },
       { to: '/families', label: 'Families', icon: 'users' },
-      { to: '/contracts', label: 'Contracts', icon: 'fileCheck', feature: 'enrollment_contract' },
+      { to: '/contracts', label: 'Contracts', icon: 'fileCheck' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { to: '/tuition', label: 'Tuition & Billing', icon: 'dollar', feature: 'tuition' },
-      { to: '/financial-aid', label: 'Financial Aid', icon: 'award', feature: 'financial_aid' },
+      { to: '/tuition', label: 'Tuition & Billing', icon: 'dollar' },
+      { to: '/financial-aid', label: 'Financial Aid', icon: 'award' },
     ],
   },
   {
     label: 'System',
     items: [
-      { to: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp', feature: 'whatsapp' },
-      { to: '/automations', label: 'Automations', icon: 'zap', feature: 'automations' },
-      { to: '/reports', label: 'Reports', icon: 'barChart', feature: 'reports' },
+      { to: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp' },
+      { to: '/automations', label: 'Automations', icon: 'zap' },
+      { to: '/reports', label: 'Reports', icon: 'barChart' },
       { to: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },
 ];
+
+// Selo de plano no menu: o item continua aí e clicável; se o recurso exige plano acima do atual, ganha o selo e abre a janelinha.
+// A barra lateral é escura, então o selo usa uma versão clara (dourada) da cor da marca.
+const BADGE_ON_DARK = { marginLeft: 0, color: '#e6bd78', background: 'rgba(230,189,120,0.14)', border: '1px solid rgba(230,189,120,0.5)' };
+
+function NavItem({ item, onNavigate }) {
+  const gate = NAV_GATES[item.to];
+  const g = usePlanGate(gate);
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      data-nav={item.to}
+      data-plan-locked={g.locked ? g.minPlan : undefined}
+      aria-haspopup={g.locked ? 'dialog' : undefined}
+      onClick={(e) => {
+        if (g.locked) { e.preventDefault(); if (onNavigate) onNavigate(); g.open(); return; }
+        if (onNavigate) onNavigate();
+      }}
+      className={({ isActive }) =>
+        `relative flex items-center gap-2.5 px-2.5 py-2 min-h-[40px] rounded-lg text-[13.5px] font-medium transition-colors ${
+          isActive && !g.locked ? 'bg-sideSoft text-white' : 'text-sideText/85 hover:bg-sideSoft/60 hover:text-white'
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && !g.locked && (
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-gold" />
+          )}
+          <span className="flex-none inline-flex"><Icon name={item.icon} size={16} /></span>
+          <span className="flex-grow min-w-0 leading-tight">{item.label}</span>
+          {g.locked && <PlanBadge gate={gate} style={BADGE_ON_DARK} />}
+        </>
+      )}
+    </NavLink>
+  );
+}
 
 export function LogoMark() {
   return (
@@ -59,8 +99,8 @@ export function LogoMark() {
 
 export default function Sidebar({ open = false, onNavigate }) {
   const { account, logout } = useAuth();
-  const { t } = useT();
-  const { allows } = usePlan();
+  const { t, lang } = useT();
+  const { me } = usePlan();
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[82vw] flex-shrink-0 bg-side text-sideText flex flex-col min-h-0 shadow-2xl transition-transform duration-300 ease-in-out md:static md:z-auto md:h-full md:w-60 md:max-w-none md:translate-x-0 md:shadow-none ${
@@ -83,34 +123,19 @@ export default function Sidebar({ open = false, onNavigate }) {
             </div>
             <div className="flex flex-col gap-0.5">
               {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    `relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13.5px] font-medium transition-colors ${
-                      isActive ? 'bg-sideSoft text-white' : 'text-sideText/85 hover:bg-sideSoft/60 hover:text-white'
-                    }`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-gold" />
-                      )}
-                      <Icon name={item.icon} size={16} />
-                      <span>{item.label}</span>
-                      {item.feature && !allows(item.feature) && <LockIcon size={12} className="ml-auto text-sideMuted" />}
-                    </>
-                  )}
-                </NavLink>
+                <NavItem key={item.to} item={item} onNavigate={onNavigate} />
               ))}
             </div>
           </div>
         ))}
       </nav>
 
+      {me?.owner && (
+        // "Ver como plano": só o dono da plataforma (OWNER_EMAILS) vê este seletor.
+        <div className="px-3 pt-3 text-sideText flex-shrink-0" data-testid="plan-preview-slot">
+          <PlanPreview theme={{ accent: '#e6bd78' }} langKey={lang} me={me} />
+        </div>
+      )}
       <div className="px-4 py-3 border-t border-sideLine flex items-center gap-2.5 flex-shrink-0">
         <NavLink to="/settings" onClick={onNavigate} title={t('accountTitle')} className="min-w-0 flex-grow">
           <div className="text-[13px] font-semibold text-white truncate">{account?.name}</div>

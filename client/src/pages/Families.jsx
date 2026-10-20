@@ -7,7 +7,7 @@ import {
 import Icon from '../components/Icon.jsx';
 import PhotoImportButton from '../components/PhotoImportButton.jsx';
 import { PortalLinkModal } from './ProModals.jsx';
-import { usePlan } from '../plans/PlanContext.jsx';
+import PlanBadge, { usePlanGate } from '../plans/PlanBadge.jsx';
 import { downloadCSV } from '../format.js';
 
 const EMPTY_FORM = { primary_guardian_name: '', secondary_guardian_name: '', email: '', phone: '', address: '', notes: '' };
@@ -18,7 +18,7 @@ export default function Families() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const { allows } = usePlan();
+  const portalGate = usePlanGate('family_portal'); // plano abaixo do Complete: o botão ganha o selo e abre a janelinha
   const [portalFor, setPortalFor] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -100,7 +100,7 @@ export default function Families() {
     { key: 'address', label: 'Address', render: (r) => r.address || '—' },
     { key: 'actions', label: '', align: 'right', render: (r) => (
       <div className="flex items-center justify-end gap-1.5">
-        {allows('family_portal') && <Button size="sm" variant="ghost" onClick={() => setPortalFor(r)}>Portal link</Button>}
+        <Button size="sm" variant="ghost" className="min-h-[40px]" onClick={portalGate.locked ? portalGate.open : () => setPortalFor(r)} data-testid="portal-link-btn" data-plan-locked={portalGate.locked ? portalGate.minPlan : undefined}>Portal link{portalGate.locked && <PlanBadge gate="family_portal" />}</Button>
         <RowActions onEdit={() => openEdit(r)} onDelete={() => setDeleteTarget(r)} />
       </div>
     ) },

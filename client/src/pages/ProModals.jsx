@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api.js';
 import { Card, CardHead, Badge, Button, Modal, Field, inputCls, Spinner } from '../components/ui.jsx';
 import { money, longDate } from '../format.js';
-import { usePlan } from '../plans/PlanContext.jsx';
+import PlanBadge, { usePlanGate } from '../plans/PlanBadge.jsx';
 
 const errBox = (e) => e && <div className="text-xs text-rose bg-roseTint border border-rose/30 rounded-lg px-3 py-2 mb-3">{e}</div>;
 const copyTo = (text, set) => navigator.clipboard?.writeText(text).then(() => { set(true); setTimeout(() => set(false), 1500); }).catch(() => {});
@@ -95,19 +95,19 @@ export function PaymentPlanModal({ families, onClose, onCreated }) {
 
 // Link público do formulário de inscrição (Configurações).
 export function ApplyLinkCard() {
-  const { allows } = usePlan();
-  const on = allows('online_application');
+  const gate = usePlanGate('online_application'); // plano abaixo do Professional: o card ganha o selo e abre a janelinha
+  const on = !gate.locked;
   const url = `${window.location.origin}/#/apply`;
   const [copied, setCopied] = useState(false);
   return (
     <Card>
-      <CardHead title="Online inquiry form" sub="A public page for families to request information. Requests land in Inquiries." />
+      <CardHead title={<>Online inquiry form{gate.locked && <PlanBadge gate="online_application" />}</>} sub="A public page for families to request information. Requests land in Inquiries." />
       <div className="px-5 pb-5">
         {on ? (<>
           <input readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Inquiry form link" className={`${inputCls} !text-xs`} />
           <div className="mt-2 flex gap-2"><Button size="sm" variant="brand" onClick={() => copyTo(url, setCopied)}>{copied ? 'Copied' : 'Copy link'}</Button>
             <a className="inline-flex items-center rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-wash" href={url} target="_blank" rel="noreferrer">Open form</a></div>
-        </>) : <p className="text-sm text-muted">Included in the Professional plan and above.</p>}
+        </>) : <Button size="sm" variant="outline" className="min-h-[40px]" onClick={gate.open} data-testid="apply-link-locked" data-plan-locked={gate.minPlan}>Copy link<PlanBadge gate="online_application" /></Button>}
       </div>
     </Card>
   );

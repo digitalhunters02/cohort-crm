@@ -3,6 +3,7 @@ import api, { BASE } from '../api.js';
 import Layout from '../components/Layout.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { MyAccountCard, StaffCard } from '../auth/AccountPanel.jsx';
+import PlanBadge, { usePlanGate, usePlan as usePlanCtx } from '../plans/PlanBadge.jsx';
 import PlansCard from '../plans/PlansCard.jsx';
 import { ApplyLinkCard } from './ProModals.jsx';
 import { Card, CardHead, Avatar, Badge, Spinner, Button, Field, Modal, inputCls } from '../components/ui.jsx';
@@ -150,7 +151,10 @@ export default function Settings() {
     api.whatsappStatus().then(setWhatsapp).catch(() => {});
   };
 
-  useEffect(refreshWhatsappStatus, []);
+  // Plano abaixo do Complete: o botão ganha o selo e abre a janelinha; a rota do WhatsApp nem é chamada (responderia 402).
+  const waGate = usePlanGate('whatsapp');
+  const { enabled: planKnown } = usePlanCtx();
+  useEffect(() => { if (planKnown && !waGate.locked) refreshWhatsappStatus(); }, [planKnown, waGate.locked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggleWhatsapp() {
     if (whatsapp.connected) {
@@ -401,8 +405,8 @@ export default function Settings() {
               <Badge tone="green">{whatsappBusy ? '…' : 'Connected'}</Badge>
             </button>
           ) : (
-            <Button variant="outline" size="sm" onClick={toggleWhatsapp} disabled={whatsappBusy}>
-              {whatsappBusy ? '…' : 'Connect'}
+            <Button variant="outline" size="sm" className="min-h-[40px]" onClick={waGate.locked ? waGate.open : toggleWhatsapp} disabled={waGate.locked ? false : whatsappBusy} data-testid="whatsapp-connect" data-plan-locked={waGate.locked ? waGate.minPlan : undefined}>
+              {whatsappBusy ? '…' : 'Connect'}{waGate.locked && <PlanBadge gate="whatsapp" />}
             </Button>
           )}
         </div>
