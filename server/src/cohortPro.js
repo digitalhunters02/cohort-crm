@@ -142,11 +142,11 @@ export function buildSchedule({ term, total, installments, first_due_date }) {
 
 export function mountCohortPro(app) {
   // ---- recomendação: pedir ao professor e ver respostas ----
-  app.get('/api/applicants/:id/recommendations', billing.requirePlan('essencial'), ar(async (req, res) => {
+  app.get('/api/applicants/:id/recommendations', billing.requireGate('recommendations'), ar(async (req, res) => {
     const rows = await all(`SELECT id, recommender_name, recommender_email, token, status, ratings, recommend, comments, signed_by, submitted_at, created_at FROM recommendations WHERE applicant_id = ? ORDER BY id DESC`, [Number(req.params.id) || 0]);
     res.json(rows.map((r) => ({ ...r, ratings: r.ratings ? JSON.parse(r.ratings) : null, url: `${baseUrl()}/#/recommend/${r.token}` })));
   }));
-  app.post('/api/applicants/:id/recommendations', billing.requirePlan('essencial'), ar(async (req, res) => {
+  app.post('/api/applicants/:id/recommendations', billing.requireGate('recommendations'), ar(async (req, res) => {
     const a = await get(`SELECT id, student_name FROM applicants WHERE id = ?`, [Number(req.params.id) || 0]);
     if (!a) return res.status(404).json({ error: 'Applicant not found' });
     const name = cleanLine(req.body?.recommender_name, 80), email = cleanLine(req.body?.recommender_email, 120).toLowerCase();
@@ -204,7 +204,7 @@ export function mountCohortPro(app) {
   }));
 
   // ---- portal da família ----
-  app.post('/api/families/:id/portal-link', billing.requirePlan('completo'), ar(async (req, res) => {
+  app.post('/api/families/:id/portal-link', billing.requireGate('family_portal'), ar(async (req, res) => {
     const f = await get(`SELECT id FROM families WHERE id = ?`, [Number(req.params.id) || 0]);
     if (!f) return res.status(404).json({ error: 'Family not found' });
     const token = newToken();
