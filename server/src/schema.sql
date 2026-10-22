@@ -154,6 +154,11 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx ON accounts (lower(email));
 CREATE INDEX IF NOT EXISTS accounts_reset_token_idx ON accounts (reset_token_hash);
 
+-- Teste grátis de 3 dias: conta temporária que só enxerga os dados de exemplo (ver demoTrial.js e POST /api/demo-request).
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_demo_trial BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS accounts_demo_expires_idx ON accounts (demo_expires_at) WHERE is_demo_trial;
+
 -- Plano e assinatura desta instalação (uma linha só): ver billing.js
 CREATE TABLE IF NOT EXISTS subscription (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),

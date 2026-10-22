@@ -8,8 +8,9 @@ import * as whatsapp from './whatsapp.js';
 import { createPhotoImportRouter, initPhotoImportSchema, startPhotoBilling } from './photoImportRouter.js';
 import { sendNoticeEmail } from './mailer.js';
 import { mountCohortPublic, mountCohortPro } from './cohortPro.js';
-import { requireAuth, requireOwner, bootstrapOwner } from './auth.js';
-import { publicAuthRoutes, accountRoutes } from './authRoutes.js';
+import { requireAuth, requireOwner, blockDemo, bootstrapOwner } from './auth.js';
+import { publicAuthRoutes, accountRoutes, demoTrialRoute } from './authRoutes.js';
+import { startDemoTrialScheduler } from './demoTrial.js';
 import { mountAdminSummary } from './adminSummary.js';
 import * as billing from './billing.js';
 import { mountBillingWebhook, mountBilling } from './billingRoutes.js';
@@ -41,6 +42,7 @@ const ar = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch
 // public. Keep this list short and intentional:
 //   GET  /api/health                              uptime / Coolify check
 //   POST /api/auth/login | forgot | reset         sign-in flow (rate limited)
+//   POST /api/demo-request                        3-day free trial on the sample data (rate limited)
 //   GET/POST /api/integrations/whatsapp/webhook   Meta calls these directly
 app.get('/api/health', ar(async (_req, res) => {
   await get('SELECT 1');
@@ -48,6 +50,7 @@ app.get('/api/health', ar(async (_req, res) => {
 }));
 
 publicAuthRoutes(app, ar);
+demoTrialRoute(app, ar);
 
 // Machine-to-machine: Harbor reads this with X-Admin-Key (see adminSummary.js).
 mountAdminSummary(app, ar, get, billing.getAdminSummary);
@@ -85,12 +88,13 @@ app.use('/api', requireAuth);
 accountRoutes(app, ar);
 
 // Plano e cobrança: status para todos, escolher plano só o dono; depois, as barreiras por plano de cada rota.
-mountBilling(app, ar, requireOwner);
+mountBilling(app, ar, requireOwner, blockDemo);
 app.use(billing.planGates());
 mountCohortPro(app);
 
 // "Importar de foto" (AI reads a photo/print, the person reviews before saving) + extra use by credits.
-app.use('/api/photo-import', createPhotoImportRouter({
+// A free-trial login never spends AI: the whole photo-import router is closed to it.
+app.use('/api/photo-import', blockDemo, createPhotoImportRouter({
   pool, requireAuth, requireAdmin: requireOwner,
   effectivePlan: billing.effectivePlan, getSubscription: billing.getSubscription,
   planLimits: { basico: 0, essencial: 100, completo: 500 },
@@ -132,7 +136,8 @@ app.get('/api/users', ar(async (req, res) => {
   res.json(await all(`SELECT * FROM users ORDER BY name`));
 }));
 
-app.post('/api/users', ar(async (req, res) => {
+// Staff directory (names shown on records): reading is free in the trial, changing it is not.
+app.post('/api/users', blockDemo, ar(async (req, res) => {
   const { name, email, role, initials, color } = req.body;
   if (!name || !email || !role || !initials || !color) {
     return badRequest(res, 'name, email, role, initials, and color are required');
@@ -147,7 +152,7 @@ app.post('/api/users', ar(async (req, res) => {
   }
 }));
 
-app.put('/api/users/:id', ar(async (req, res) => {
+app.put('/api/users/:id', blockDemo, ar(async (req, res) => {
   const existing = await selectUser(req.params.id);
   if (!existing) return notFound(res, 'Staff member');
   const { name, email, role, initials, color } = req.body;
@@ -164,7 +169,7 @@ app.put('/api/users/:id', ar(async (req, res) => {
   }
 }));
 
-app.delete('/api/users/:id', ar(async (req, res) => {
+app.delete('/api/users/:id', blockDemo, ar(async (req, res) => {
   const existing = await selectUser(req.params.id);
   if (!existing) return notFound(res, 'Staff member');
   const refs = [
@@ -827,7 +832,7 @@ app.get('/api/integrations/whatsapp/status', ar(async (req, res) => {
   res.json({ connected: !!conn, displayPhone: conn?.display_phone || null });
 }));
 
-app.post('/api/integrations/whatsapp/connect', requireOwner, ar(async (req, res) => {
+app.post('/api/integrations/whatsapp/connect', blockDemo, requireOwner, ar(async (req, res) => {
   const { phoneNumberId, accessToken, businessAccountId, verifyToken } = req.body || {};
   if (!phoneNumberId || !accessToken) {
     return badRequest(res, 'Phone Number ID and Access Token are required.');
@@ -840,20 +845,21 @@ app.post('/api/integrations/whatsapp/connect', requireOwner, ar(async (req, res)
   }
 }));
 
-app.post('/api/integrations/whatsapp/disconnect', requireOwner, ar(async (req, res) => {
+app.post('/api/integrations/whatsapp/disconnect', blockDemo, requireOwner, ar(async (req, res) => {
   await whatsapp.disconnect();
   res.status(204).end();
 }));
 
-app.get('/api/integrations/whatsapp/conversations', ar(async (req, res) => {
+// Conversations are real people's messages: closed to a free-trial login (it only sees the sample data).
+app.get('/api/integrations/whatsapp/conversations', blockDemo, ar(async (req, res) => {
   res.json(await whatsapp.listConversations());
 }));
 
-app.get('/api/integrations/whatsapp/conversations/:phone', ar(async (req, res) => {
+app.get('/api/integrations/whatsapp/conversations/:phone', blockDemo, ar(async (req, res) => {
   res.json(await whatsapp.getConversation(req.params.phone));
 }));
 
-app.post('/api/integrations/whatsapp/send', ar(async (req, res) => {
+app.post('/api/integrations/whatsapp/send', blockDemo, ar(async (req, res) => {
   const { to, text } = req.body || {};
   if (!to || !text) return badRequest(res, 'to and text are required');
   try {
@@ -888,6 +894,7 @@ initSchema()
       console.log(`Cohort API listening on http://localhost:${PORT}`);
     });
     startPhotoBilling({ pool, getSubscription: billing.getSubscription });
+    startDemoTrialScheduler();
   })
   .catch((err) => {
     console.error('Failed to initialize database schema:', err);
