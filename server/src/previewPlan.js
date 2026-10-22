@@ -7,7 +7,7 @@ import { store, previewPlans, isOwnerEmail } from './owner.js';
 
 export function applyPreview(req, account, next) {
   const want = String(req.headers['x-preview-plan'] || '').trim().toLowerCase();
-  if (want && previewPlans().includes(want) && isOwnerEmail(account?.email)) {
+  if (want && previewPlans().includes(want) && !account?.is_demo_trial && isOwnerEmail(account?.email)) { // conta de teste grátis nunca é 'dono' (o e-mail dela é digitado pelo visitante)
     req.previewPlan = want;
     return store.run({ accountId: account.id, plan: want }, next);
   }

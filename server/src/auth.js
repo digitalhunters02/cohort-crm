@@ -50,6 +50,8 @@ export function publicAccount(a) {
     role: a.role,
     mustChangePassword: !!a.must_change_password,
     createdAt: a.created_at,
+    isDemoTrial: !!a.is_demo_trial,
+    demoExpiresAt: a.demo_expires_at || null,
   };
 }
 
@@ -79,6 +81,10 @@ export async function requireAuth(req, res, next) {
     if (!account || (account.token_version || 0) !== (payload.tv || 0)) {
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
+    // Free-trial login whose 3 days are up (the hourly sweep may not have deleted it yet): never lets it in.
+    if (account.is_demo_trial && (!account.demo_expires_at || new Date(account.demo_expires_at) <= new Date())) {
+      return res.status(401).json({ error: 'Your free trial has ended.', code: 'demo_expired' });
+    }
     req.account = account;
     // Dono da plataforma vendo o produto como outro plano: só para OWNER_EMAILS, nunca muda a conta (previewPlan.js).
     return applyPreview(req, account, next);
@@ -89,6 +95,13 @@ export async function requireAuth(req, res, next) {
 
 export function requireOwner(req, res, next) {
   if (req.account?.role !== 'owner') return res.status(403).json({ error: 'Only the account owner can do this' });
+  next();
+}
+
+// A free-trial login works on the shared sample data only: nothing that leaves the system, spends money or touches
+// security/owner settings. Put it on the route (after requireAuth) like requireOwner.
+export function blockDemo(req, res, next) {
+  if (req.account?.is_demo_trial) return res.status(403).json({ error: 'Não disponível no teste grátis', code: 'demo_blocked' });
   next();
 }
 

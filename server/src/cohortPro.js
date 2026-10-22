@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { get, all, run } from './db.js';
 import * as billing from './billing.js';
+import { blockDemo } from './auth.js';
 import { sendLinkEmail, isMailConfigured } from './mailer.js';
 
 const ar = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -146,7 +147,8 @@ export function mountCohortPro(app) {
     const rows = await all(`SELECT id, recommender_name, recommender_email, token, status, ratings, recommend, comments, signed_by, submitted_at, created_at FROM recommendations WHERE applicant_id = ? ORDER BY id DESC`, [Number(req.params.id) || 0]);
     res.json(rows.map((r) => ({ ...r, ratings: r.ratings ? JSON.parse(r.ratings) : null, url: `${baseUrl()}/#/recommend/${r.token}` })));
   }));
-  app.post('/api/applicants/:id/recommendations', billing.requireGate('recommendations'), ar(async (req, res) => {
+  // Sends an e-mail to a teacher: closed to a free-trial login.
+  app.post('/api/applicants/:id/recommendations', blockDemo, billing.requireGate('recommendations'), ar(async (req, res) => {
     const a = await get(`SELECT id, student_name FROM applicants WHERE id = ?`, [Number(req.params.id) || 0]);
     if (!a) return res.status(404).json({ error: 'Applicant not found' });
     const name = cleanLine(req.body?.recommender_name, 80), email = cleanLine(req.body?.recommender_email, 120).toLowerCase();
@@ -204,7 +206,8 @@ export function mountCohortPro(app) {
   }));
 
   // ---- portal da família ----
-  app.post('/api/families/:id/portal-link', billing.requireGate('family_portal'), ar(async (req, res) => {
+  // Makes (and replaces) a public link to a family's data: closed to a free-trial login.
+  app.post('/api/families/:id/portal-link', blockDemo, billing.requireGate('family_portal'), ar(async (req, res) => {
     const f = await get(`SELECT id FROM families WHERE id = ?`, [Number(req.params.id) || 0]);
     if (!f) return res.status(404).json({ error: 'Family not found' });
     const token = newToken();
@@ -217,7 +220,8 @@ export function mountCohortPro(app) {
     const rows = await all(`SELECT c.id, c.family_id, c.student_name, c.title, c.status, c.token, c.signed_by, c.signed_at, c.created_at, f.primary_guardian_name FROM contracts c JOIN families f ON f.id = c.family_id ORDER BY c.id DESC`);
     res.json(rows.map(({ token, ...r }) => ({ ...r, url: `${baseUrl()}/#/contract/${token}` })));
   }));
-  app.post('/api/contracts', ar(async (req, res) => {
+  // Creating a contract is free; asking for it to be e-mailed to the family (send_email) is not.
+  app.post('/api/contracts', (req, res, next) => (req.body?.send_email ? blockDemo(req, res, next) : next()), ar(async (req, res) => {
     const b = req.body || {};
     const family_id = Number(b.family_id); const title = cleanLine(b.title, 120); const body = clean(b.body, 20000);
     if (!title || body.length < 20) return res.status(400).json({ error: 'Please enter a title and the contract text.' });
