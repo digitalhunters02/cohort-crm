@@ -4,6 +4,9 @@
 import { BRAND } from './brand.jsx';
 
 export const AUTH_EXPIRED_EVENT = 'crm-auth-expired';
+// Disparado quando o servidor recusa uma ação por a sessão ser de teste grátis (a faixa mostra o aviso).
+export const DEMO_BLOCKED_EVENT = 'cohort-demo-blocked';
+const TRIAL_ENDED_KEY = 'cohort-trial-ended';
 
 function read(storage) {
   try {
@@ -53,9 +56,29 @@ export function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// Teste grátis vencido: a tela de login mostra "seu teste terminou" uma vez.
+export function markTrialEnded() {
+  try { sessionStorage.setItem(TRIAL_ENDED_KEY, '1'); } catch { /* armazenamento bloqueado */ }
+}
+
+export function takeTrialEnded() {
+  try {
+    const was = sessionStorage.getItem(TRIAL_ENDED_KEY) === '1';
+    sessionStorage.removeItem(TRIAL_ENDED_KEY);
+    return was;
+  } catch {
+    return false;
+  }
+}
+
+export function notifyDemoBlocked() {
+  window.dispatchEvent(new Event(DEMO_BLOCKED_EVENT));
+}
+
 // Called by api.js when any request comes back 401 while holding a token.
-export function handleUnauthorized() {
+export function handleUnauthorized(code) {
   if (!getToken()) return;
+  if (code === 'demo_expired') markTrialEnded();
   clearSession();
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }

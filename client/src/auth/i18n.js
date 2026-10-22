@@ -20,6 +20,10 @@ function initialLang() {
 let current = initialLang();
 const listeners = new Set();
 
+export function currentLang() {
+  return current;
+}
+
 export function setLang(code) {
   if (!AUTH_STRINGS[code]) return;
   current = code;

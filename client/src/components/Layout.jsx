@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Sidebar, { LogoMark } from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import Icon from './Icon.jsx';
+import TrialBanner from './TrialBanner.jsx';
 
 export default function Layout({ title, count, actions, children, flush = false }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function Layout({ title, count, actions, children, flush = false 
       <Sidebar open={drawerOpen} onNavigate={() => setDrawerOpen(false)} />
 
       <div className="flex flex-col flex-grow min-w-0 h-full pt-14 md:pt-0">
+        <TrialBanner />
         <Topbar title={title} count={count} actions={actions} />
         {flush ? (
           <div className="flex-grow min-h-0 overflow-hidden">{children}</div>

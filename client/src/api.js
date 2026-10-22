@@ -1,4 +1,5 @@
-import { authHeaders, handleUnauthorized } from './auth/session.js';
+import { authHeaders, handleUnauthorized, notifyDemoBlocked } from './auth/session.js';
+import { translate, currentLang } from './auth/i18n.js';
 
 // In local dev, "/api" is proxied to the local server (see vite.config.js).
 // In production there's no such proxy, so VITE_API_URL must point at the
@@ -8,14 +9,19 @@ import { authHeaders, handleUnauthorized } from './auth/session.js';
 export const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
 
 async function handle(r, isRead = false) {
-  // A rejected session (expired, password changed elsewhere) signs the user out.
-  if (r.status === 401) handleUnauthorized();
   const data = await r.json().catch(() => ({}));
+  // A rejected session (expired, password changed elsewhere, free trial over) signs the user out.
+  if (r.status === 401) handleUnauthorized(data.code);
+  // A free-trial login tried something the trial does not allow: say so, whatever page it came from.
+  if (r.status === 403 && data.code === 'demo_blocked') {
+    notifyDemoBlocked();
+    data.error = translate(currentLang(), 'trial.blocked'); // forms that print err.message show it in the chosen language
+  }
   if (!r.ok) {
     // Recurso de plano maior: o app abre a janelinha "Disponível no plano X" (plans/PlanContext.jsx) em vez de só mostrar o erro.
     // (só para ações da pessoa; leituras de tela já são protegidas pelo PlanGate e não devem abrir janelinha sozinhas)
     if (!isRead && r.status === 402 && data.code === 'plan_required') window.dispatchEvent(new CustomEvent('plan-required', { detail: { gate: data.feature } }));
-    throw new Error(data.error || `Request failed (${r.status})`);
+    throw Object.assign(new Error(data.error || `Request failed (${r.status})`), { status: r.status, code: data.code });
   }
   return data;
 }
@@ -62,7 +68,8 @@ const api = {
       form.append('kind', kind); form.append('lang', lang); form.append('file', file, file.name || 'photo.jpg');
       const res = await fetch(`${BASE}/photo-import`, { method: 'POST', headers: authHeaders(), body: form });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 401) handleUnauthorized();
+      if (res.status === 401) handleUnauthorized(data.code);
+      if (res.status === 403 && data.code === 'demo_blocked') notifyDemoBlocked();
       if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { code: data.code, status: res.status });
       return data;
     },

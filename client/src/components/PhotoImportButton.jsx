@@ -4,6 +4,8 @@ import { Button, Modal } from './ui.jsx';
 import Icon from './Icon.jsx';
 import PhotoImportModal from './PhotoImportModal.jsx';
 import api from '../api.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { notifyDemoBlocked } from '../auth/session.js';
 import { photoT } from '../i18n/photoImportStrings.js';
 
 const CLS = {
@@ -17,13 +19,16 @@ const CLS = {
 // Anvil is English-only today: when a language switch is added, replace `lang` and the dictionary here.
 export default function PhotoImportButton({ kind, title, fields, validate, toPayload, onSave, onImported }) {
   const [open, setOpen] = useState(false);
+  const { account } = useAuth();
+  // Free trial: reading a photo spends AI, so the server refuses it; say so right here instead of opening the window.
+  const openOrExplain = () => (account?.isDemoTrial ? notifyDemoBlocked() : setOpen(true));
   const t = useMemo(() => {
     const base = photoT('en');
     return title ? (k, v) => (k === `photo.title.${kind}` ? title : base(k, v)) : base;
   }, [title, kind]);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} data-testid="photo-import-open">
+      <Button variant="outline" onClick={openOrExplain} data-testid="photo-import-open">
         <Icon name="camera" size={15} /> {t('photo.button')}
       </Button>
       {open && (

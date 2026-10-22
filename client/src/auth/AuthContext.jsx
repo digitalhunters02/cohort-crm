@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { authApi } from './authApi.js';
-import { readSession, writeSession, clearSession, isRemembered, AUTH_EXPIRED_EVENT } from './session.js';
+import { readSession, writeSession, clearSession, isRemembered, markTrialEnded, AUTH_EXPIRED_EVENT } from './session.js';
+import { getAttribution } from './attribution.js';
 
 const AuthContext = createContext(null);
 
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
       .catch((err) => {
         // Only a rejected token signs the user out; a network blip keeps them in.
         if (err.status === 401) {
+          if (err.code === 'demo_expired') markTrialEnded();
           clearSession();
           setSession(null);
         }
@@ -42,6 +44,14 @@ export function AuthProvider({ children }) {
     setSession(next);
   }, []);
 
+  // "Teste grátis de 3 dias": nome + e-mail, sem senha. A conta de teste entra direto (e guarda de que anúncio veio).
+  const startTrial = useCallback(async (name, email) => {
+    const { token, account } = await authApi.demoRequest(name, email, getAttribution());
+    const next = { token, account };
+    writeSession(true, next);
+    setSession(next);
+  }, []);
+
   const logout = useCallback(() => {
     clearSession();
     setSession(null);
@@ -56,7 +66,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ token: session?.token || null, account: session?.account || null, checking, login, logout, replaceSession }}
+      value={{ token: session?.token || null, account: session?.account || null, checking, login, startTrial, logout, replaceSession }}
     >
       {children}
     </AuthContext.Provider>
