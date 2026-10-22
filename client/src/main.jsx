@@ -4,7 +4,11 @@ import { HashRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { PlanProvider } from './plans/PlanContext.jsx';
+import { captureAttribution } from './auth/attribution.js';
 import './index.css';
+
+// Guarda de que anúncio o visitante veio (utm_*, fbclid) antes de qualquer troca de tela.
+captureAttribution();
 
 // Makes an installed copy (Add to Home Screen) pick up a new deploy on its
 // own — as soon as a new service worker takes over, reload once so the page

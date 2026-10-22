@@ -89,8 +89,13 @@ export function MyAccountCard() {
         </button>
       }
     >
-      <h4 className="text-xs font-semibold text-muted mb-3 uppercase tracking-wide">{t('changePassword')}</h4>
-      <ChangePasswordForm />
+      {/* A free-trial login has no password of its own: nothing to change. */}
+      {!account?.isDemoTrial && (
+        <>
+          <h4 className="text-xs font-semibold text-muted mb-3 uppercase tracking-wide">{t('changePassword')}</h4>
+          <ChangePasswordForm />
+        </>
+      )}
     </Panel>
   );
 }

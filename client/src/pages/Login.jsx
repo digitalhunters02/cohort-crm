@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { BRAND } from '../auth/brand.jsx';
+import { takeTrialEnded } from '../auth/session.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { authApi } from '../auth/authApi.js';
 import { useT, friendlyError } from '../auth/i18n.js';
@@ -50,6 +52,41 @@ function ForgotPasswordForm({ onBack }) {
   );
 }
 
+// Teste grátis de 3 dias: nome + e-mail, sem senha e sem cartão. Entra direto com dados de exemplo.
+function TrialForm({ onCancel }) {
+  const { startTrial } = useAuth();
+  const { t } = useT();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await startTrial(name.trim(), email.trim());
+    } catch (err) {
+      setError(friendlyError(err, t));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} data-testid="trial-form">
+      <p className="text-[13px] text-muted mb-4">{t('trial.intro', { app: BRAND.name })}</p>
+      <TextField label={t('trial.name')} name="trial-name" autoComplete="name" autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+      <TextField label={t('email')} type="email" name="trial-email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <ErrorNote>{error}</ErrorNote>
+      <PrimaryButton type="submit" disabled={busy} data-testid="trial-submit">{busy ? t('trial.starting') : t('trial.start')}</PrimaryButton>
+      <button type="button" onClick={onCancel} disabled={busy} className="w-full text-center text-[12px] font-medium text-muted hover:text-ink mt-3 py-1">
+        {t('trial.cancel')}
+      </button>
+    </form>
+  );
+}
+
 export default function Login() {
   const { login } = useAuth();
   const { t } = useT();
@@ -59,6 +96,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState('login');
+  // Voltou para cá porque o teste grátis venceu: avisa uma vez.
+  const [trialEnded] = useState(() => takeTrialEnded());
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -74,8 +113,15 @@ export default function Login() {
 
   return (
     <AuthShell subtitle={mode === 'forgot' ? t('forgotTitle') : undefined}>
+      {trialEnded && (
+        <p role="status" data-testid="trial-ended" className="text-[13px] text-ink bg-amberTint border border-amber/30 rounded-md px-3 py-2 mb-4">
+          {t('trial.ended', { app: BRAND.name })}
+        </p>
+      )}
       {mode === 'forgot' ? (
         <ForgotPasswordForm onBack={() => { setMode('login'); setError(''); }} />
+      ) : mode === 'trial' ? (
+        <TrialForm onCancel={() => { setMode('login'); setError(''); }} />
       ) : (
         <form onSubmit={handleSubmit}>
           <TextField label={t('email')} type="email" name="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -100,6 +146,14 @@ export default function Login() {
           </div>
           <ErrorNote>{error}</ErrorNote>
           <PrimaryButton type="submit" disabled={busy}>{busy ? t('signingIn') : t('signIn')}</PrimaryButton>
+          <button
+            type="button"
+            onClick={() => { setMode('trial'); setError(''); }}
+            data-testid="trial-open"
+            className="w-full text-center text-[12px] text-faint hover:text-muted mt-4 pt-4 border-t border-lineSoft"
+          >
+            {t('trial.ctaLead')} <span className="font-semibold text-brand">{t('trial.cta')}</span>
+          </button>
         </form>
       )}
     </AuthShell>

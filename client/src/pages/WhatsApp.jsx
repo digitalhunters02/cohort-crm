@@ -24,7 +24,7 @@ export default function WhatsApp() {
     api.whatsappConversations().then((rows) => {
       setConversations(rows);
       setSelectedPhone((prev) => prev || (rows[0] && rows[0].contact_phone) || null);
-    });
+    }).catch(() => setConversations([]));
   };
 
   useEffect(() => {
