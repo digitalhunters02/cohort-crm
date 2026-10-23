@@ -226,6 +226,36 @@ test('conta de teste não conta no limite de logins do plano nem no resumo do Ha
   await basic.stop();
 });
 
+test('selo de plano + teste grátis: /api/billing/status serve a conta de teste (sem ser "dono"), o "Ver como plano" não vale para ela e os bloqueios por plano seguem o plano da instalação', async () => {
+  // O e-mail do teste é digitado pelo visitante: mesmo sendo um e-mail de OWNER_EMAILS sem conta real, a conta de teste nunca vira "dono da plataforma".
+  const VISITOR = 'plataforma-dono@example.com';
+  const basic = await startServer(PORT.basic, { LICENSED_PLAN: 'basico', OWNER_EMAILS: VISITOR });
+  try {
+    const t = await trial(basic, { name: 'Visitante Dono', email: VISITOR });
+    assert.equal(t.status, 201, t.text);
+    const tok = t.json.token;
+    const st = await basic.call('GET', '/api/billing/status', { token: tok });
+    assert.equal(st.status, 200, st.text);
+    assert.equal(st.json.plan, 'basico');
+    assert.equal(st.json.owner, false, 'conta de teste não é dono da plataforma');
+    assert.equal(st.json.previewPlan, null);
+    assert.equal(st.json.gates.seats.minPlan, 'essencial');
+    assert.equal(st.json.gates.seats.locked, true);
+    assert.equal(st.json.gates.whatsapp.locked, true);
+    assert.equal(st.json.users, (await dbq(`SELECT COUNT(*)::int n FROM accounts WHERE NOT is_demo_trial`))[0].n, 'a conta de teste não conta nos logins do plano');
+    assert.ok(Array.isArray(st.json.catalog) && st.json.catalog.length === 3);
+    // "Ver como plano" é ignorado: continua no plano da instalação
+    const prev = await basic.call('GET', '/api/billing/status', { token: tok, headers: { 'X-Preview-Plan': 'completo' } });
+    assert.equal(prev.json.plan, 'basico');
+    assert.equal(prev.json.previewPlan, null);
+    assert.equal((await basic.call('GET', '/api/seats', { token: tok, headers: { 'X-Preview-Plan': 'completo' } })).status, 402);
+    // recurso do plano da instalação segue livre para leitura; o que seria cobrança/plano segue fechado ao teste
+    assert.equal((await basic.call('GET', '/api/students', { token: tok })).status, 200);
+    assert.equal((await basic.call('POST', '/api/billing/checkout', { token: tok, body: { plan: 'completo' } })).status, 403);
+    assert.equal((await basic.call('GET', '/api/public/plans')).status, 200);
+  } finally { await basic.stop(); }
+});
+
 test('teste vencido: o token é recusado com mensagem clara, a limpeza apaga a conta, e quem volta ganha um teste novo', async () => {
   await dbq(`UPDATE accounts SET demo_expires_at = now() - interval '1 minute' WHERE id = $1`, [trialAccount.id]);
   const r = await main.call('GET', '/api/inquiries', { token: T });

@@ -23,6 +23,7 @@ const OWNER_PASS = 'E2e-owner-pass-1';
 const ADMIN_KEY = 'e2e-admin-key-e2e-admin-key-0123456789';
 const APP_PORT = 7831;
 const HARBOR_PORT = 7832;
+const SELO_PORT = 7833; // segundo servidor, no plano Essential, só para o selo de plano
 const ADMIN_URL = process.env.TEST_PG_ADMIN_URL || 'postgres://test:test@127.0.0.1:5432/postgres';
 const DB = `cohort_trial_e2e_${process.pid}`;
 const DB_URL = ADMIN_URL.replace(/\/[^/]*$/, `/${DB}`);
@@ -199,6 +200,43 @@ try {
       && hit.body.notes === '3-day demo trial (demo-request)' && hit.body.utm_source === u && hit.body.utm_medium === 'paid'
       && hit.body.utm_campaign === 'cohort-oct' && hit.body.fbclid === `FB-${u}`, JSON.stringify(hit?.body));
   }
+  // plan badge ("selo") + trial: same database, but a second server on the Essential plan; the trial login must see the
+  // menu badges, no platform-owner selector, and a locked feature opens the plan window instead of breaking
+  const srv2 = spawn('node', [path.join(SERVER, 'index.js')], {
+    env: { ...process.env, NODE_ENV: 'test', PORT: String(SELO_PORT), DATABASE_URL: DB_URL, JWT_SECRET: 'e2e-secret-e2e-secret-1234',
+      BOOTSTRAP_OWNER_EMAIL: OWNER_EMAIL, BOOTSTRAP_OWNER_PASSWORD: OWNER_PASS, SMTP_HOST: '', LICENSED_PLAN: 'basico', DEMO_TRIAL_DISABLED: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    const base2 = `http://127.0.0.1:${SELO_PORT}`;
+    for (let i = 0; i < 100; i++) { try { if ((await fetch(base2 + '/api/health')).ok) break; } catch { /* wait */ } await new Promise((r) => setTimeout(r, 150)); }
+    for (const [label, opts] of [['1440', { viewport: { width: 1440, height: 900 } }], ['390', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+      const ctx = await browser.newContext({ ...opts, locale: 'en-US', extraHTTPHeaders: { 'X-Forwarded-For': `10.60.0.${label.length}${label[0]}` } });
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(`${base2}/#/`);
+      await page.waitForSelector('[data-testid=trial-open]');
+      await page.click('[data-testid=trial-open]');
+      await page.fill('input[name=trial-name]', 'Pat Selo');
+      await page.fill('input[name=trial-email]', `pat.selo${label}@prospect.test`);
+      await page.click('[data-testid=trial-submit]');
+      await page.waitForSelector('[data-testid=trial-banner]');
+      await page.waitForSelector('aside nav [data-plan-badge]', { state: 'attached', timeout: 8000 });
+      const badges = await page.$$eval('aside nav [data-plan-badge]', (els) => els.map((e) => e.dataset.planBadge));
+      check(`[selo-${label}] menu shows plan badges for a trial login on the Essential plan`, badges.length >= 5 && badges.every((b) => ['essencial', 'completo'].includes(b)), badges.join(','));
+      check(`[selo-${label}] no platform-owner preview selector for a trial login`, (await page.locator('[data-testid="plan-preview-slot"]').count()) === 0);
+      const mm = await noHScroll(page);
+      check(`[selo-${label}] no horizontal scroll with banner + badges`, mm.sw <= mm.iw && mm.bw <= mm.iw, `scrollWidth=${mm.sw}`);
+      await page.goto(`${base2}/#/interviews`);
+      await page.waitForTimeout(800);
+      const txt = await page.locator('body').innerText();
+      check(`[selo-${label}] locked screen shows the friendly plan card, not an error`, /Professional/.test(txt) && !/Request failed|Something went wrong/i.test(txt));
+      await page.screenshot({ path: path.join(SHOTS, `${PRODUCT}-trial-selo-${label}.png`) });
+      check(`[selo-${label}] no uncaught page errors`, errors.length === 0, errors.join(' | '));
+      await ctx.close();
+    }
+  } finally { srv2.kill('SIGTERM'); }
 } catch (e) {
   console.error(e);
   failures++;
