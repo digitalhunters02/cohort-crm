@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import SupportCard from '../components/SupportCard.jsx';
 import api, { BASE } from '../api.js';
 import Layout from '../components/Layout.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -254,6 +255,7 @@ export default function Settings() {
 
   return (
     <Layout title="Settings">
+      <SupportCard />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         {account?.role === 'owner' && <StaffCard />}
         <MyAccountCard />

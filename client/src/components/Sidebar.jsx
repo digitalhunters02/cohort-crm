@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { SupportNavLink } from './SupportCard.jsx';
 import Icon from './Icon.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useT } from '../auth/i18n.js';
@@ -111,6 +112,7 @@ export default function Sidebar({ open = false, onNavigate }) {
         ))}
       </nav>
 
+<SupportNavLink />
       <div className="px-4 py-3 border-t border-sideLine flex items-center gap-2.5 flex-shrink-0">
         <NavLink to="/settings" onClick={onNavigate} title={t('accountTitle')} className="min-w-0 flex-grow">
           <div className="text-[13px] font-semibold text-white truncate">{account?.name}</div>
